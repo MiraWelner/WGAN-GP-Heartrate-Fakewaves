@@ -1,0 +1,9 @@
+Raw_Data_Processing/5patients_waveforms
+Raw_Data_Processing/Additional10
+Raw_Data_Processing/DeadvsAlive
+Raw_Data_Processing/proccessed_data.csv
+
+processed_data/
+
+__pycache__/
+.ropeproject
