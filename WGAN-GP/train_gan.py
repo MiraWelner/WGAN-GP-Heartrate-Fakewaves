@@ -8,24 +8,21 @@ pytorch model, and displays and stores the comparison of the test set and the tr
 """
 
 #libraries imported
-import pandas as pd
 import numpy as np
 import torch
 import sys
 from torch.utils.data import TensorDataset, DataLoader
 import matplotlib.pyplot as plt
 from wgan import train_wgan
-from scipy.signal import find_peaks
 
 #Constants set here
 seconds = 7
 hz=500
-batch_size=248
+batch_size=256
 latent_dim = 100
-epochs = 500
+epochs = 5
 itt = 100
-#if you want you can only train on specific signals
-signals_tested = ['ecg0_channel0']
+
 
 #first it makes sure that the machine you are running on has a GPU
 if torch.cuda.is_available():
@@ -34,25 +31,22 @@ else:
     print("No GPU found")
     sys.exit()
 
+data_file= 'alive/08_ch2_merged.bin.csv'
 #the proccessed data which is proccessed in the 0_Raw_Data_Processing folder is loaded and channels selected
-df = pd.read_csv('../Raw_Data_Processing/proccessed_data.csv', index_col=0)
-df = df[signals_tested]
-
+dataset = np.loadtxt(f'../processed_data/{data_file}', delimiter=',')
 #train/test split
-train_data = df.iloc[len(df)//3:]
-test_data = df.iloc[:len(df)//3]
+train_data = np.expand_dims(dataset[len(dataset)//3:, :],1)
+test_data = np.expand_dims(dataset[:len(dataset)//3, :],1)
 
 #snips the data in accordance with the R peak. Since they are all from the same
 # patient, the ecg0 sensor is used to determine R peak. Any other ecg singal would likely be similar.
-def generate_dataloader(data, seconds, hz=hz):
-    peaks, _ = find_peaks(data[signals_tested[0]], height=0.1)
-    snips = np.array([data[p:p+seconds*hz].T for p in peaks if len(data[p:p+seconds*hz])==seconds*hz])
-    torch_data = torch.from_numpy(snips.astype(np.float32))
-    dataloader = DataLoader(TensorDataset(torch_data), batch_size=batch_size, shuffle=False, num_workers=6)
+def generate_dataloader(data):
+    torch_data = torch.from_numpy(data.astype(np.float32))
+    print(f"Torch data shape: {torch_data.shape}")
+    dataloader = DataLoader(TensorDataset(torch_data), batch_size=batch_size, shuffle=False, num_workers=6, drop_last=True)
     return dataloader
-dl_ecg_train = generate_dataloader(train_data, seconds)
-dl_ecg_test = generate_dataloader(test_data, seconds)
-
+dl_ecg_train = generate_dataloader(train_data)
+dl_ecg_test = generate_dataloader(test_data)
 
 #train the model!
 generator, discriminator = train_wgan(dl_ecg_train,
@@ -61,8 +55,8 @@ generator, discriminator = train_wgan(dl_ecg_train,
     signal_length=seconds*hz,
     epochs=epochs,
     batch_size=batch_size,
-    channels=len(df.columns))
-torch.save(generator.state_dict(), f"../models/generator_weights_{'_'.join(signals_tested)}.pth")
+    channels=1)
+torch.save(generator.state_dict(), f"../models/generator_weights_{epochs}.pth")
 #generator = Generator(signal_length=seconds*hz, latent_dim=seconds*hz, channels=len(df.columns)).cuda()
 #generator.load_state_dict(torch.load("generator_weights.pth", weights_only=True))
 
@@ -71,43 +65,39 @@ fake_signals = np.concatenate([generator(torch.randn(1, latent_dim).cuda()).cpu(
 real_test_signal = np.array(next(iter(dl_ecg_train))).squeeze()
 
 #plot test results
-_, axes = plt.subplots(len(signals_tested),1, figsize=(17,11))
-if len(signals_tested) == 1:
-    # When there is only one channel, it breaks some things
-    # This is somewhat of a hack but it fixes it
-    axes = [axes]
-    real_test_signal = np.expand_dims(real_test_signal,axis=1)
+_ = plt.figure(figsize=(17,11))
 
 xticks = np.arange(0, hz*seconds + 1, hz)
-xtick_labels = np.arange(0, seconds + 1, 1)
+xtick_labels = [str(i) for i in np.arange(0, seconds + 1, 1)]
 
-for i in range(len(signals_tested)):
-    #mean and 95% confidence for WGAN-GP output
-    wgan_signal = np.mean(fake_signals[:, i, :], axis=0)
-    wgan_lower = np.percentile(fake_signals[:, i, :], 2.5, axis=0)
-    wgan_upper = np.percentile(fake_signals[:, i, :], 97.5, axis=0)
-    wgan_error = np.array([wgan_signal - wgan_lower, wgan_upper - wgan_signal])
 
-    #mean and 95% confidence for all test set
-    test_signal = np.mean(real_test_signal[:, i, :], axis=0)
-    test_lower = np.percentile(real_test_signal[:, i, :], 2.5, axis=0)
-    test_upper = np.percentile(real_test_signal[:, i, :], 97.5, axis=0)
-    test_error = np.array([test_signal - test_lower, test_upper - test_signal])
+wgan_signal = np.mean(fake_signals, axis=0)
+wgan_lower = np.percentile(fake_signals, 2.5, axis=0)
+wgan_upper = np.percentile(fake_signals, 97.5, axis=0)
+wgan_error = np.array([wgan_signal - wgan_lower, wgan_upper - wgan_signal])
 
-    #plot the error and mean for both test and WGAN set
-    axes[i].errorbar(range(0, len(test_signal)), wgan_signal, yerr=test_error,alpha=0.1, color='cornflowerblue')
-    axes[i].plot(test_signal, label="Test set - mean and 95% confidence", color='cornflowerblue')
+#mean and 95% confidence for all test set
+test_signal = np.mean(real_test_signal, axis=0)
+test_lower = np.percentile(real_test_signal, 2.5, axis=0)
+test_upper = np.percentile(real_test_signal, 97.5, axis=0)
+test_error = np.array([test_signal - test_lower, test_upper - test_signal])
 
-    axes[i].errorbar(range(0, len(wgan_signal)), wgan_signal, yerr=wgan_error,alpha=0.1, color='orange')
-    axes[i].plot(wgan_signal, label=f"WGAN-GP generated signal {epochs} epochs - mean and 95% confidence of {itt} iterations", color='orange')
+#plot the error and mean for both test and WGAN set
+print(len(wgan_signal))
+print(len(test_error))
+plt.errorbar(range(0, len(wgan_signal[0])), wgan_signal, yerr=test_error,alpha=0.1, color='cornflowerblue')
+plt.plot(test_signal, label="Test set - mean and 95% confidence", color='cornflowerblue')
 
-    axes[i].legend()
-    axes[i].set_xticks(xticks, xtick_labels)
-    axes[i].set_ylim(-1,1)
-    axes[i].set_xlabel("Time (s)")
-    axes[i].set_ylabel("Voltage (Normalized)")
-    axes[i].set_title(f"Comparison Between Generated {str(df.columns[i]).upper()} Signal and Test Set {str(df.columns[i]).upper()}")
+plt.errorbar(range(0, len(wgan_signal[0])), wgan_signal, yerr=wgan_error,alpha=0.1, color='orange')
+plt.plot(wgan_signal, label=f"WGAN-GP generated signal {epochs} epochs - mean and 95% confidence of {itt} iterations", color='orange')
+
+plt.legend()
+plt.xticks(xticks, xtick_labels)
+plt.ylim(-1,1)
+plt.xlabel("Time (s)")
+plt.ylabel("Voltage (Normalized)")
+plt.title("Comparison Between Generated  Signal and Test Set")
 
 plt.tight_layout()
-plt.savefig(f"../figures/output_comparison_{len(signals_tested)}_channels_{epochs}_epochs.png")
+plt.savefig(f"../figures/wgan_comparison_{data_file}_{epochs}.png")
 plt.show()

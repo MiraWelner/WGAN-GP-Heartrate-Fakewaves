@@ -39,24 +39,20 @@ def make_ecg_signal(path):
     signal = np.nan_to_num(np.fromfile(path, dtype=np.float64), nan=0.0)
     signal = sosfilt(sos, signal)
     counts, bin_edges = np.histogram(signal, bins=500)
-    bin_edge_spots = np.where(counts > len(signal)//20)[0]
+    bin_edge_spots = np.where(counts > len(signal)//30)[0]
     bin_edge_spots = bin_edge_spots[bin_edge_spots != 0]  # it should never be 0 that means its getting no signal
     min_val = bin_edges[bin_edge_spots[0]]
     max_val = bin_edges[bin_edge_spots[-1]+1]
-    clipped_signal = np.clip(signal, min_val, max_val)
-    normalized_signal = 2 * (clipped_signal - min_val) / (max_val - min_val) - 1
+    signal = np.array(signal)[(signal<max_val) & (signal>min_val)]
+    normalized_signal = 2 * (signal - min_val) / (max_val - min_val) - 1
     return normalized_signal
-
-
-
-
 
 def proccess_patient_files(input_folder, output_folder):
     for p in tqdm(os.listdir(input_folder)):
         segment_length = 500 * seconds
         path = f'{input_folder}/{p}'
         signal = make_ecg_signal(path)
-        peaks = find_peaks(signal, height=0.5)[0]
+        peaks = find_peaks(signal, height=0.8, distance=300)[0] #distance: 100bpm
         valid_peaks = peaks[peaks + segment_length <= len(signal)]
         segments = np.array([signal[peak:peak + segment_length] for peak in valid_peaks])
         np.savetxt(f'{output_folder}/{p}.csv', segments, delimiter=',', fmt='%.6f')
