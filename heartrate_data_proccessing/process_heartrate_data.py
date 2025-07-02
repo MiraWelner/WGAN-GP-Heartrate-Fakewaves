@@ -11,30 +11,63 @@ cannot easily be automated. So, my hope is that the model will remove the noise.
 
 import pandas as pd
 from glob import glob
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.interpolate import interp1d
+from random import randrange
 
-def process_rr(rr_distance_ms):
+frac_sec = 10 #the x values are 100th of a second
+
+def process_rr(rr_distance_ms, snip_len = 3500):
     bpm = 60000/rr_distance_ms
-    scaled_heartrate = (bpm/75 -1).to_numpy()
-    num_samples = len(scaled_heartrate)//3500
-    scaled_heartrate_trimmed = scaled_heartrate[:num_samples*3500]
-    heartrate_snips = scaled_heartrate_trimmed.reshape(num_samples, 3500)
+    scaled_heartrate = bpm/75 -1
+    num_samples = len(scaled_heartrate)//snip_len
+    scaled_heartrate_trimmed = scaled_heartrate[:num_samples*snip_len]
+    heartrate_snips = scaled_heartrate_trimmed.reshape(num_samples, snip_len)
     snip_df = pd.DataFrame(heartrate_snips)
     return snip_df
 
+
 df = pd.DataFrame()
+for i in range(1,5):
+    path = f"heartrate_data/18-58-25_8_hours_part{i}_v2_wholecaseRRiQTi.csv"
+    file = pd.read_csv(path)
+    rr_distance_ms = file.iloc[:, 3]
+    x = file.iloc[:,1]
+    f_interp = interp1d(x, rr_distance_ms, kind='linear')
+    x_ms = np.arange(min(x), max(x)-1, 1/frac_sec)
+    y_ms = f_interp(x_ms)
+    df = pd.concat([df, process_rr(y_ms)])
 
-for path in glob("heartrate_data/07-15-37_8_hours_part*_v2_wholecaseRRiQTi.csv"):
-    file_df = pd.read_csv(path)
-    rr_distance_ms = file_df.iloc[:, 3]
-    snip_df = process_rr(rr_distance_ms)
-    df = pd.concat([df, snip_df], axis=0)
-    print(df.shape)
 
+for i in range(1,5):
+    path = f"heartrate_data/07-15-37_8_hours_part{i}_v2_wholecaseRRiQTi.csv"
+    file = pd.read_csv(path)
+    rr_distance_ms = file.iloc[:, 3]
+    x = file.iloc[:,1]
+    f_interp = interp1d(x, rr_distance_ms, kind='linear')
+    x_ms = np.arange(min(x), max(x)-1, 1/frac_sec)
+    y_ms = f_interp(x_ms)
+    df = pd.concat([df, process_rr(y_ms)])
 
-for path in glob("heartrate_data/11-03-38_8_hours_part2_v2_everyRRQTinputIntoEntropy_Rel*_Abs*.csv"):
-    file_df = pd.read_csv(path)
-    rr_distance_s = file_df.iloc[:, 1]#.astype(float)
-    rr_distance_ms = rr_distance_s*1000
-    snip_df = process_rr(rr_distance_ms)
-    df = pd.concat([df, snip_df], axis=0)
-    print(df.shape)
+heartrate_11_x = []
+heartrate_11_y = []
+for i in range(1,28):
+    path = glob(f"heartrate_data/11-03-38_8_hours_part2_v2_everyRRQTinputIntoEntropy_Rel{i}_Abs*")[0]
+    file = pd.read_csv(path)
+    x = file.iloc[:,0]
+    if len(heartrate_11_x):
+        x+=heartrate_11_x[-1]
+    rr_distance_s = np.asarray(file.iloc[:,1])
+    heartrate_11_y.extend(rr_distance_s*1000)
+    heartrate_11_x.extend(x)
+f_interp = interp1d(heartrate_11_x, heartrate_11_y, kind='linear')
+x_ms = np.arange(min(heartrate_11_x), max(heartrate_11_x)-1, 1/frac_sec)
+y_ms = f_interp(x_ms)
+df = pd.concat([df, process_rr(y_ms)])
+
+for i in range(20):
+    plt.plot(df.iloc[randrange(df.shape[0]),:])
+    plt.title(df.shape[0])
+    plt.show()
+df.to_csv('../processed_data/heartrate_processed.csv')

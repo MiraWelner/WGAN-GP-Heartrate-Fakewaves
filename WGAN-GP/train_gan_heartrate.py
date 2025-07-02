@@ -14,12 +14,12 @@ import sys
 from torch.utils.data import TensorDataset, DataLoader
 import matplotlib.pyplot as plt
 from wgan import train_wgan, Generator
+import pandas as pd
 from random import randrange
 
 #Constants set here
-seconds = 7
-hz=500
-batch_size=4
+batch_size=64
+signal_length = 3500
 latent_dim = 100
 epochs = 1000
 itt = 100
@@ -32,12 +32,10 @@ else:
     print("No GPU found")
     sys.exit()
 
-dataset = np.loadtxt('heartrate_data/07-15-37_8_hours_part1_v2_wholecaseRRiQTi.csv', delimiter=',')
-print(dataset)
-sys.exit()
+dataset = pd.read_csv('../processed_data/heartrate_processed.csv', index_col=0)
 #train/test split
-train_data = np.expand_dims(dataset[10:],1)
-test_data = np.expand_dims(dataset[:10],1)
+train_data = np.expand_dims(dataset[dataset.shape[0]//3:],1)
+test_data = np.expand_dims(dataset[:dataset.shape[0]//3],1)
 # snips the data in accordance with the R peak. Since they are all from the same
 # patient, the ecg0 sensor is used to determine R peak. Any other ecg singal would likely be similar.
 def generate_dataloader(data):
@@ -52,51 +50,61 @@ dl_ecg_test = generate_dataloader(test_data)
 generator, discriminator = train_wgan(dl_ecg_train,
     dl_ecg_test,
     latent_dim=latent_dim,
-    signal_length=seconds*hz,
+    signal_length=signal_length,
     epochs=epochs,
     batch_size=batch_size,
     channels=1)
 torch.save(generator.state_dict(), f"../models/generator_weights_heartrate_{epochs}.pth")
 """
-generator = Generator(signal_length=seconds*hz, latent_dim=latent_dim, channels=train_data.shape[1]).cuda()
+generator = Generator(signal_length=signal_length, latent_dim=latent_dim, channels=train_data.shape[1]).cuda()
 generator.load_state_dict(torch.load(f"../models/generator_weights_heartrate_{epochs}.pth", weights_only=True))
 
 #test models
-fake_signal = np.stack([generator(torch.randn(1, latent_dim).cuda()).cpu().detach().numpy().squeeze() for _ in range(itt)])
-mean_sig = np.mean(fake_signal ,axis=0)
-std_sig = np.std(fake_signal, axis=0)
-median_sig = np.median(fake_signal, axis=0)
+fake_signal = np.array([generator(torch.randn(1, latent_dim).cuda()).cpu().detach().numpy().squeeze() for _ in range(itt)])
+real_test_signal = test_data.squeeze()
 
-#real_test_signal = test_data[randrange(test_data.shape[1]),:].T
-#plot test results
-_, axes = plt.subplots(3, 1, figsize=(17,8))
+#plot the error and mean for both test and WGAN set
+wgan_signal = np.mean(fake_signal, axis=0).squeeze()
+wgan_lower = np.percentile(fake_signal, 2.5, axis=0)
+wgan_upper = np.percentile(fake_signal, 97.5, axis=0)
+wgan_error = np.array([wgan_signal - wgan_lower, wgan_upper - wgan_signal]).squeeze()
 
-axes[0].plot(mean_sig)
-axes[0].set_title("mean WGAN-GP output")
+#mean and 95% confidence for all test set
+test_signal = np.mean(real_test_signal, axis=0).squeeze()
+test_lower = np.percentile(real_test_signal, 2.5, axis=0)
+test_upper = np.percentile(real_test_signal, 97.5, axis=0)
+test_error = np.array([test_signal - test_lower, test_upper - test_signal]).squeeze()
 
-axes[1].plot(std_sig)
-axes[1].set_title("std WGAN-GP output")
-
-axes[2].plot(median_sig)
-axes[2].set_title("median WGAN-GP output")
-
-xticks = np.arange(0, hz*seconds + 1, hz)
-xtick_labels = [str(i) for i in np.arange(0, seconds + 1, 1)]
+_ = plt.figure(figsize=(14,6))
 
 
 #plot the error and mean for both test and WGAN set
-#plt.errorbar(range(0, len(wgan_signal)), wgan_signal, yerr=test_error,alpha=0.1, color='cornflowerblue')
-#plt.plot(fake_signal, label="WGAN-GP generated heart rate", color='cornflowerblue')
+plt.errorbar(range(0, len(wgan_signal)), wgan_signal, yerr=test_error,alpha=0.1, color='cornflowerblue')
+plt.plot(test_signal, label="Test set — mean and 95% confidence", color='cornflowerblue')
 
-#plt.errorbar(range(0, len(wgan_signal)), wgan_signal, yerr=wgan_error,alpha=0.1, color='orange')
-#plt.plot(real_test_signal, label="Test Generated Heart Rate", color='orange')
-"""
+plt.errorbar(range(0, len(wgan_signal)), wgan_signal, yerr=wgan_error,alpha=0.1, color='rebeccapurple')
+plt.plot(wgan_signal, label=f"WGAN-GP Output — mean and 95% confidence of {itt} iterations", color='rebeccapurple')
+
 plt.legend()
-plt.ylim(-0.25,2)
-plt.xlabel("Time")
+plt.ylim(-0.75,0.75)
+plt.xlabel("Time (s)")
+plt.xticks(np.arange(0, len(wgan_signal)+1, 500), np.arange(0, len(wgan_signal)//10+1, 50))
 plt.ylabel("Normalized BPM")
-plt.title("Comparison Between Generated Signal and Test Set")
-"""
+plt.title(f"Comparison Between Generated Signal and Test Set {epochs} epochs")
+
 plt.tight_layout()
 plt.savefig(f"../figures/wgan_comparison/heartrate_{epochs}.png")
 plt.show()
+
+
+for _ in range(10):
+    _ = plt.figure(figsize=(14,6))
+    randval = randrange(real_test_signal.shape[0])
+    plt.plot(real_test_signal[randval,:])
+    plt.title("Randomly Selected Heartrate from Test Set")
+    plt.xlabel("Time (s)")
+    plt.ylabel("Normalized BPM")
+    plt.xticks(np.arange(0, len(wgan_signal)+1, 500), np.arange(0, len(wgan_signal)//10+1, 50))
+    plt.savefig(f"../figures/sample_{randval}.png")
+
+    plt.show()
