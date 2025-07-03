@@ -71,22 +71,23 @@ xtick_labels = [str(i) for i in np.arange(0, seconds + 1, 1)]
 
 
 wgan_signal = np.mean(fake_signals, axis=0).squeeze()
-wgan_lower = np.percentile(fake_signals, 2.5, axis=0)
-wgan_upper = np.percentile(fake_signals, 97.5, axis=0)
-wgan_error = np.array([wgan_signal - wgan_lower, wgan_upper - wgan_signal]).squeeze()
+wgan_std_dev = np.std(fake_signals, axis=0, ddof=1)  # Sample standard deviation
+wgan_n = fake_signals.shape[0]  # Sample size
+z_score = 1.96  # Z-score for 95% confidence interval
+wgan_margin_of_error = z_score * (wgan_std_dev / np.sqrt(wgan_n))
+wgan_error = np.array([wgan_margin_of_error, wgan_margin_of_error]).squeeze()
 
 #mean and 95% confidence for all test set
 test_signal = np.mean(real_test_signal, axis=0).squeeze()
-test_lower = np.percentile(real_test_signal, 2.5, axis=0)
-test_upper = np.percentile(real_test_signal, 97.5, axis=0)
-test_error = np.array([test_signal - test_lower, test_upper - test_signal]).squeeze()
+test_std_dev = np.std(real_test_signal, axis=0, ddof=1)  # Sample standard deviation
+test_n = real_test_signal.shape[0]  # Sample size
+test_margin_of_error = z_score * (test_std_dev / np.sqrt(test_n))
+test_error = np.array([test_margin_of_error, test_margin_of_error]).squeeze()
 
 #plot the error and mean for both test and WGAN set
-plt.errorbar(range(0, len(wgan_signal)), wgan_signal, yerr=test_error,alpha=0.1, color='cornflowerblue')
-plt.plot(test_signal, label="Test set - mean and 95% confidence", color='cornflowerblue')
+plt.errorbar(range(0, len(test_signal)), test_signal, yerr=test_error, alpha=0.3, color='cornflowerblue', label="Test set - mean and 95% confidence")
 
-plt.errorbar(range(0, len(wgan_signal)), wgan_signal, yerr=wgan_error,alpha=0.1, color='orange')
-plt.plot(wgan_signal, label=f"WGAN-GP generated signal {epochs} epochs - mean and 95% confidence of {itt} iterations", color='orange')
+plt.errorbar(range(0, len(wgan_signal)), wgan_signal, yerr=wgan_error, alpha=0.3, color='orange', label=f"WGAN-GP generated signal {epochs} epochs - mean and 95% confidence of {itt} iterations")
 
 plt.legend()
 plt.xticks(xticks, xtick_labels)

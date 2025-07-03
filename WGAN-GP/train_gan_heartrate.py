@@ -65,16 +65,21 @@ real_test_signal = test_data.squeeze()
 
 #plot the error and mean for both test and WGAN set
 wgan_signal = np.mean(fake_signal, axis=0).squeeze()
-wgan_lower = np.percentile(fake_signal, 2.5, axis=0)
-wgan_upper = np.percentile(fake_signal, 97.5, axis=0)
-wgan_error = np.array([wgan_signal - wgan_lower, wgan_upper - wgan_signal]).squeeze()
+wgan_std_dev = np.std(fake_signal, axis=0, ddof=1)  #
+wgan_median_dev = np.median(fake_signal, axis=0)
+#Sample standard deviation
+wgan_n = fake_signal.shape[0]  # Sample size
+z_score = 1.96  # Z-score for 95% confidence interval
+wgan_margin_of_error = z_score * (wgan_std_dev / np.sqrt(wgan_n))
+wgan_error = np.array([wgan_margin_of_error, wgan_margin_of_error]).squeeze()
 
 #mean and 95% confidence for all test set
 test_signal = np.mean(real_test_signal, axis=0).squeeze()
-test_lower = np.percentile(real_test_signal, 2.5, axis=0)
-test_upper = np.percentile(real_test_signal, 97.5, axis=0)
-test_error = np.array([test_signal - test_lower, test_upper - test_signal]).squeeze()
-
+test_std_dev = np.std(real_test_signal, axis=0, ddof=1)  # Sample standard deviation
+test_n = real_test_signal.shape[0]  # Sample size
+test_margin_of_error = z_score * (test_std_dev / np.sqrt(test_n))
+test_error = np.array([test_margin_of_error, test_margin_of_error]).squeeze()
+"""
 _ = plt.figure(figsize=(14,6))
 
 
@@ -88,7 +93,7 @@ plt.plot(wgan_signal, label=f"WGAN-GP Output — mean and 95% confidence of {itt
 plt.legend()
 plt.ylim(-0.75,0.75)
 plt.xlabel("Time (s)")
-plt.xticks(np.arange(0, len(wgan_signal)+1, 500), np.arange(0, len(wgan_signal)//10+1, 50))
+plt.xticks(np.arange(0, len(wgan_signal)+1, 500), np.arange(0, len(wgan_signal)//2+1, 250))
 plt.ylabel("Normalized BPM")
 plt.title(f"Comparison Between Generated Signal and Test Set {epochs} epochs")
 
@@ -104,7 +109,21 @@ for _ in range(10):
     plt.title("Randomly Selected Heartrate from Test Set")
     plt.xlabel("Time (s)")
     plt.ylabel("Normalized BPM")
-    plt.xticks(np.arange(0, len(wgan_signal)+1, 500), np.arange(0, len(wgan_signal)//10+1, 50))
+    plt.xticks(np.arange(0, len(wgan_signal)+1, 1000), np.arange(0, len(wgan_signal)//2+1, 500))
     plt.savefig(f"../figures/sample_{randval}.png")
 
     plt.show()
+"""
+
+_, axes = plt.subplots(3, 1, figsize=(17,11))
+axes[0].plot(wgan_signal)
+axes[0].set_title("MEAN")
+axes[1].plot(wgan_std_dev)
+axes[1].set_title("STD")
+axes[2].plot(wgan_median_dev)
+axes[2].set_title("MEDIAN")
+plt.tight_layout()
+plt.savefig("STUFF.png")
+print(np.mean(test_signal*75+75))
+print(np.std(wgan_std_dev))
+print(np.median(test_signal*75+75))
