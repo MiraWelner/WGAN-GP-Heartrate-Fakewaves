@@ -8,11 +8,8 @@ distance at that individual decasecond.
 
 import pandas as pd
 from glob import glob
-import matplotlib.pyplot as plt
-import sys
 import numpy as np
 from scipy.interpolate import interp1d
-from random import randrange
 
 frac_sec = 2 #the x values are half of a second
 rr_df = pd.DataFrame()
@@ -28,8 +25,9 @@ def process_rr(rr_distance_ms, snip_len = 3500):
     return snip_df
 
 def process_qt(qt_distance_ms, snip_len = 3500):
-    num_samples = len(qt_distance_ms)//snip_len
-    scaled_heartrate_trimmed = qt_distance_ms[:num_samples*snip_len]
+    scaled_qt = qt_distance_ms/350 - 1
+    num_samples = len(scaled_qt)//snip_len
+    scaled_heartrate_trimmed = scaled_qt[:num_samples*snip_len]
     heartrate_snips = scaled_heartrate_trimmed.reshape(num_samples, snip_len)
     snip_df = pd.DataFrame(heartrate_snips)
     return snip_df
