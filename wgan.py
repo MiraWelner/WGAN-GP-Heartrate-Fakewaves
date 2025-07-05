@@ -2,7 +2,6 @@ import numpy as np
 import torch
 from torch.nn import Linear, LeakyReLU, Sequential, Tanh, Module
 from torch.optim.rmsprop import RMSprop #RMSprop rather than ADAM bc https://dl.acm.org/doi/pdf/10.5555/3305381.3305404
-import matplotlib.pyplot as plt
 from tqdm import trange
 
 class Generator(Module):
@@ -13,7 +12,7 @@ class Generator(Module):
     of data are related to eachother (ECG signals taken
     from the same patient at the same time)
     """
-    def __init__(self, latent_dim, signal_length, channels):
+    def __init__(self, latent_dim=100, signal_length=3500, channels=1):
         super().__init__()
         self.signal_length = signal_length
         self.channels = channels
@@ -79,7 +78,7 @@ def compute_gradient_penalty(D, real_samples, fake_samples):
     gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
     return gradient_penalty
 
-def train_wgan(dataloader, test_dl, latent_dim, signal_length, epochs, batch_size, channels):
+def train_wgan(dataloader, test_dl, epochs, latent_dim=100, signal_length=3500, batch_size=256, channels=1):
     d_losses = []
     g_losses = []
     generator = Generator(latent_dim, signal_length, channels).cuda()
@@ -125,7 +124,8 @@ def train_wgan(dataloader, test_dl, latent_dim, signal_length, epochs, batch_siz
         torch.cuda.empty_cache()
 
 
-
+    """
+    import matplotlib.pyplot as plt
     fig, axes = plt.subplots(1,2,figsize=(10,5),)
     plt.suptitle("Training Error for the WGAN-GP")
     axes[0].plot(g_losses)
@@ -138,6 +138,7 @@ def train_wgan(dataloader, test_dl, latent_dim, signal_length, epochs, batch_siz
     axes[1].set_xticks(np.arange(0, len(d_losses) + 1, len(d_losses)//5))
     axes[1].set_xlabel("Epochs")
     plt.tight_layout()
-    plt.savefig(f"../figures/training_error_{channels}_channels_{epochs}_epochs.png")
     plt.show()
+    plt.savefig(f"../figures/training_error_{channels}_channels_{epochs}_epochs.png")
+    """
     return generator, discriminator
