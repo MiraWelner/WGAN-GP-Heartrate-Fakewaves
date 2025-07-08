@@ -78,7 +78,7 @@ def compute_gradient_penalty(D, real_samples, fake_samples):
     gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
     return gradient_penalty
 
-def train_wgan(dataloader, test_dl, epochs, latent_dim=100, signal_length=3500, batch_size=256, channels=1):
+def train_wgan(dataloader, epochs, latent_dim=100, signal_length=3500, batch_size=256, channels=1):
     d_losses = []
     g_losses = []
     generator = Generator(latent_dim, signal_length, channels).cuda()
