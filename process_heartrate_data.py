@@ -2,11 +2,8 @@
 Mira Welner
 June 2025
 
-This script loads Dr. Cong's PPG and ECG data, removes outliers, and interpolates the PPG data
-which is 125 hz to be 500hz like the ECG data.
-
-As of now, this algorithm does NOT remove noise because my previous notch filter method
-cannot easily be automated. So, my hope is that the model will remove the noise.
+This script loads Dr Dey's ECG data and reports the RR and QT intervals. It then creates a training table of
+length=3500 for each snip for both RR and QT
 """
 
 import pandas as pd
