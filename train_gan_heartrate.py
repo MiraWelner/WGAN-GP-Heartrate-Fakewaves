@@ -14,8 +14,6 @@ import matplotlib.pyplot as plt
 from wgan import train_wgan, Generator
 import pandas as pd
 
-
-
 def make_train_test_dataloaders(rr, qt):
     def generate_dataloader(data):
         torch_data = torch.from_numpy(data.astype(np.float32))
@@ -51,9 +49,7 @@ def plot_mean_and_diff(rr_test_squeeze, rr_gen_output, qt_test_squeeze, qt_gen_o
 
     mean_rr_gen = np.mean(rr_gen_output, axis=0)
     mean_rr_real = np.mean(rr_test_squeeze, axis=0)
-    mean_diff = np.mean(mean_rr_real - mean_rr_gen, axis=0)
-    lower_bound = mean_rr_real - np.minimum(mean_diff, np.zeros(len(mean_rr_real)))
-    upper_bound = mean_rr_real - np.maximum(mean_diff, np.zeros(len(mean_rr_real)))
+
 
     #axes[0].fill_between(range(rr_gen_output.shape[1]), lower_bound, upper_bound, alpha=0.5, label="Mean Difference Between Real and Gen")
     axes[0].plot(mean_rr_real, label="Mean Real Data", color='red')
@@ -73,9 +69,6 @@ def plot_mean_and_diff(rr_test_squeeze, rr_gen_output, qt_test_squeeze, qt_gen_o
     #plot triangle wave data on lower plot
     mean_qt_real = np.mean(qt_test_squeeze, axis=0)
     mean_qt_gen = np.mean(qt_gen_output, axis=0)
-    mean_diff = np.mean(mean_qt_real - mean_qt_gen, axis=0)
-    lower_bound = mean_qt_real + np.minimum(mean_diff, np.zeros(len(mean_qt_real)))
-    upper_bound = mean_qt_real + np.maximum(mean_diff, np.zeros(len(mean_qt_real)))
 
     #axes[1].fill_between(range(qt_gen_output.shape[1]), lower_bound, upper_bound, alpha=0.5, label="Mean Difference Between Real and Gen")
     axes[1].plot(mean_qt_real, label="Mean Real Data", color='red')
