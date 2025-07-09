@@ -8,8 +8,11 @@ distance at that individual decasecond.
 
 import pandas as pd
 from glob import glob
+import matplotlib.pyplot as plt
+import sys
 import numpy as np
 from scipy.interpolate import interp1d
+from random import randrange
 
 frac_sec = 2 #the x values are half of a second
 rr_df = pd.DataFrame()
@@ -17,7 +20,7 @@ qt_df = pd.DataFrame()
 
 def process_rr(rr_distance_ms, snip_len = 3500):
     bpm = 60000/rr_distance_ms
-    scaled_heartrate = bpm/75 -1
+    scaled_heartrate = bpm/75-1
     num_samples = len(scaled_heartrate)//snip_len
     scaled_heartrate_trimmed = scaled_heartrate[:num_samples*snip_len]
     heartrate_snips = scaled_heartrate_trimmed.reshape(num_samples, snip_len)
@@ -25,9 +28,8 @@ def process_rr(rr_distance_ms, snip_len = 3500):
     return snip_df
 
 def process_qt(qt_distance_ms, snip_len = 3500):
-    scaled_qt = qt_distance_ms/350 - 1
-    num_samples = len(scaled_qt)//snip_len
-    scaled_heartrate_trimmed = scaled_qt[:num_samples*snip_len]
+    num_samples = len(qt_distance_ms)//snip_len
+    scaled_heartrate_trimmed = qt_distance_ms[:num_samples*snip_len]
     heartrate_snips = scaled_heartrate_trimmed.reshape(num_samples, snip_len)
     snip_df = pd.DataFrame(heartrate_snips)
     return snip_df
@@ -41,12 +43,16 @@ def proccess_datafile(path):
     file = pd.read_csv(path)
     rr_distance_ms = file.iloc[:, 3]
     qt_distance_ms = np.array([0.0 if val == '  ' else val for val in file.iloc[:, 4]], dtype=float)
-    x = file.iloc[:,1]
-    x_ms = np.arange(min(x), max(x)-1, 1/frac_sec)
+    timestamps = file.iloc[:,1]
 
-    f_interp_rr = interp1d(x, rr_distance_ms, kind='linear')
-    f_interp_qt = interp1d(x, qt_distance_ms, kind='linear')
-    return process_rr(f_interp_rr(x_ms)), process_qt(f_interp_qt(x_ms))
+    x = np.arange(min(timestamps), max(timestamps)-1, 1/frac_sec)
+
+    f_interp_rr = interp1d(timestamps, rr_distance_ms, kind='linear')
+    f_interp_qt = interp1d(timestamps, qt_distance_ms, kind='linear')
+    fig = plt.figure()
+    plt.plot(f_interp_rr(x))
+    plt.show()
+    return process_rr(f_interp_rr(x)), process_qt(f_interp_qt(x))
 
 
 for i in range(1,5):
@@ -63,6 +69,7 @@ for i in range(1,5):
 
 # the everyRRQTinputIntoEntropy files are proccessed differently because they are formatted
 # differently for some reason
+"""
 everyRRQT_time_data = []
 everyRRQT_rr_data = []
 everyRRQT_qt_data = []
@@ -82,6 +89,8 @@ f_interp_qt = interp1d(everyRRQT_time_data, everyRRQT_qt_data, kind='linear')
 x_ms = np.arange(min(everyRRQT_time_data), max(everyRRQT_time_data)-1, 1/frac_sec)
 rr_df = pd.concat([rr_df, process_rr(f_interp_rr(x_ms))])
 qt_df = pd.concat([qt_df, process_rr(f_interp_qt(x_ms))])
+"""
+
 
 rr_df.to_csv('processed_data/rr_processed.csv')
 qt_df.to_csv('processed_data/qt_processed.csv')
