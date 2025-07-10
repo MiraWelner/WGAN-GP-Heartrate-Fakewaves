@@ -22,15 +22,16 @@ def increment(mode, peak_distance, ordered_it):
     whether you want an evenly spaced wavefunction or a randomly spaced one
     or a patterned spaced one
     """
-    ordered = [5,1,2,7,3,4,10,1,6,5]
+    def get_sin(i):
+        return np.sin(i*np.pi/10)
     match mode:
         case 'even':
             return peak_distance
         case 'random':
             return int(randrange(10)*peak_distance/10)
-        case 'ordered':
-            i =  ordered[ordered_it]*peak_distance/10
-            if ordered_it+1 == len(ordered):
+        case 'sin':
+            i =  get_sin(ordered_it)*peak_distance/10
+            if ordered_it+1 == 10:
                 ordered_it = 0
             else:
                 ordered_it += 1

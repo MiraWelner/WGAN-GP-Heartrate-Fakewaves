@@ -11,7 +11,7 @@ import sys
 from torch.utils.data import TensorDataset, DataLoader
 import matplotlib.pyplot as plt
 from wgan import train_wgan, Generator
-import pandas as pd
+import polars as pl
 
 def make_train_test_dataloaders(rr, qt):
     def generate_dataloader(data):
@@ -20,11 +20,10 @@ def make_train_test_dataloaders(rr, qt):
         return dataloader
 
     #train/test split
-    print(rr.shape)
-    train_rr = np.expand_dims(rr.values[rr.shape[0]//8:],1)
-    test_rr = np.expand_dims(rr.values[:rr.shape[0]//8],1)
-    train_qt = np.expand_dims(qt.values[qt.shape[0]//8:],1)
-    test_qt = np.expand_dims(qt.values[:qt.shape[0]//8],1)
+    train_rr = np.expand_dims(rr[rr.shape[0]//8:],1)
+    test_rr = np.expand_dims(rr[:rr.shape[0]//8],1)
+    train_qt = np.expand_dims(qt[qt.shape[0]//8:],1)
+    test_qt = np.expand_dims(qt[:qt.shape[0]//8],1)
 
     train_rr_dl = generate_dataloader(train_rr)
     train_qt_dl = generate_dataloader(train_qt)
@@ -116,12 +115,11 @@ else:
     print("No GPU found")
     sys.exit()
 
-qt = pd.read_csv('processed_data/qt_processed.csv', index_col=0)
-rr = pd.read_csv('processed_data/rr_processed.csv', index_col=0)
-
+qt = pl.read_csv('processed_data/qt_processed.csv')
+rr = pl.read_csv('processed_data/rr_processed.csv')
 
 train_rr, test_rr, train_qt, test_qt = make_train_test_dataloaders(rr, qt)
-gen_rr, gen_qt = train_store_gan(train_rr, train_qt, just_load=True)
+gen_rr, gen_qt = train_store_gan(train_rr, train_qt, just_load=False)
 
 rr_gen_output = np.array([gen_rr(torch.randn(1, 100).cuda()).cpu().detach().numpy().squeeze() for _ in range(500)])
 rr_test_squeeze = test_rr.squeeze()
