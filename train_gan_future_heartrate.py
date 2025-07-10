@@ -1,8 +1,8 @@
 """
 Mira Welner
 July 2025
-This script generates a loads the qt and rr intervals from the proccessed_data folder
-and plots the WGAN-GP's output when trained on the intervals
+This script loads the processed heartrate, splits it such that the first 5 minutes is used to train
+the generator and the descriminator tries to distinguish the generated data from the second 5 minutes.
 """
 
 import numpy as np
