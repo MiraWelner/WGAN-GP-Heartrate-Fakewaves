@@ -12,9 +12,9 @@ from scipy.interpolate import interp1d
 from glob import glob
 import itertools
 
-frac_sec = 10 #the x values are 10th of a second
+frac_sec = 7 #the x values are 5th of a second
 
-def process_rr(rr_distance_ms, snip_len):
+def process_rr(rr_distance_ms, snip_len=3500):
     bpm = 60000/rr_distance_ms
     scaled_heartrate = bpm/75 -1
     num_samples = len(scaled_heartrate)//snip_len
@@ -23,7 +23,7 @@ def process_rr(rr_distance_ms, snip_len):
     snip_df = pl.DataFrame(heartrate_snips)
     return snip_df
 
-def process_qt(qt_distance_ms, snip_len):
+def process_qt(qt_distance_ms, snip_len=3500):
     scaled_qt = qt_distance_ms/350-1
     num_samples = len(scaled_qt)//snip_len
     scaled_heartrate_trimmed = scaled_qt[:num_samples*snip_len]
@@ -31,7 +31,7 @@ def process_qt(qt_distance_ms, snip_len):
     snip_df = pl.DataFrame(heartrate_snips)
     return snip_df
 
-def proccess_file(path, snip_len=3500):
+def proccess_file(path):
     file = pl.read_csv(path)
     rr_distance_ms = np.array(file.select(file.columns[3]), dtype=np.float64).flatten()
     qt_distance_ms = [i.astype(np.float64).item() if i != '  ' else 0 for i in np.array(file.select(file.columns[4]))]
@@ -44,7 +44,7 @@ def proccess_file(path, snip_len=3500):
     f_interp_qt = interp1d(qt_times_s, qt_distance_ms, kind='linear')
     x_qt = np.arange(qt_times_s.min(), qt_times_s.max()-1, 1/frac_sec)
     interpolated_qt = f_interp_qt(x_qt)
-    return process_rr(interpolated_rr, snip_len), process_qt(interpolated_qt, snip_len)
+    return process_rr(interpolated_rr), process_qt(interpolated_qt)
 
 
 #for the large processed files which can be hours long
@@ -67,7 +67,7 @@ for i in range(1,5):
     rr = pl.concat([rr, new_rr])
     qt = pl.concat([qt, new_qt])
 
-    rr_10min, qt_10min = proccess_file(path, snip_len=6000)
+    rr_10min, qt_10min = proccess_file(path)
     rr_18 = pl.concat([rr_18, rr_10min])
     qt_18 = pl.concat([qt_18, qt_10min])
 
@@ -77,7 +77,7 @@ for i in range(1,5):
     rr = pl.concat([rr, new_rr])
     qt = pl.concat([qt, new_qt])
 
-    rr_10min, qt_10min = proccess_file(path, snip_len=6000)
+    rr_10min, qt_10min = proccess_file(path)
     rr_07 = pl.concat([rr_07, rr_10min])
     qt_07 = pl.concat([qt_07, qt_10min])
 
@@ -106,11 +106,11 @@ interpolated_rr = f_interp_rr(x_rr)
 f_interp_qt = interp1d(qt_times_s, short_files_qt, kind='linear')
 x_qt = np.arange(min(qt_times_s), max(qt_times_s)-1, 1/frac_sec)
 interpolated_qt = f_interp_qt(x_qt)
-rr = pl.concat([rr, process_rr(interpolated_rr, snip_len=3500)])
-qt = pl.concat([qt, process_qt(interpolated_qt, snip_len=3500)])
+rr = pl.concat([rr, process_rr(interpolated_rr)])
+qt = pl.concat([qt, process_qt(interpolated_qt)])
 
-rr_11 = process_rr(interpolated_rr, snip_len=6000)
-qt_11 = process_qt(interpolated_qt, snip_len=6000)
+rr_11 = process_rr(interpolated_rr)
+qt_11 = process_qt(interpolated_qt)
 
 rr.write_csv('processed_data/rr_processed.csv')
 qt.write_csv('processed_data/qt_processed.csv')
