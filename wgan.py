@@ -12,7 +12,7 @@ class Generator(Module):
     of data are related to eachother (ECG signals taken
     from the same patient at the same time)
     """
-    def __init__(self, latent_dim=100, signal_length=3500, channels=1):
+    def __init__(self, signal_length, latent_dim, channels=1):
         super().__init__()
         self.signal_length = signal_length
         self.channels = channels
@@ -78,10 +78,10 @@ def compute_gradient_penalty(D, real_samples, fake_samples):
     gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
     return gradient_penalty
 
-def train_wgan(dataloader, epochs, latent_dim=100, signal_length=3500, batch_size=256, channels=1):
+def train_wgan(dataloader, epochs, signal_length, latent_dim=100, channels=1):
     d_losses = []
     g_losses = []
-    generator = Generator(latent_dim, signal_length, channels).cuda()
+    generator = Generator(signal_length, latent_dim, channels).cuda()
     discriminator = Critic(signal_length, channels).cuda()
 
     lr = 1e-4
@@ -121,7 +121,6 @@ def train_wgan(dataloader, epochs, latent_dim=100, signal_length=3500, batch_siz
 
         d_losses.append(np.mean(np.array(d_loss_batch)))
         g_losses.append(np.mean(np.array(g_loss_batch)))
-        torch.cuda.empty_cache()
 
 
     """
