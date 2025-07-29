@@ -11,7 +11,6 @@ import matplotlib.pyplot as plt
 from wgan import train_wgan, Generator
 import polars as pl
 from scipy.signal import find_peaks
-from typing import NoReturn
 plt.rcParams.update({'font.size': 8})
 
 iterations = 50
@@ -100,7 +99,7 @@ def plot_mean_and_diff(synth_data:list, ground_truth_data:list, full_dataset:pl.
     if show:
         plt.show()
 
-def make_table(synth_data:list, ground_truth_data:list, full_dataset:pl.DataFrame, name:str, offset:int=0, show=False) -> NoReturn:
+def make_table(synth_data:list, ground_truth_data:list, full_dataset:pl.DataFrame, name:str, offset:int=0, show=False):
     fig, axes = plt.subplots(5,4,figsize=(18,8))
     for itr, (synthetic, ground_truth, full_wave) in enumerate(zip(synth_data, ground_truth_data, full_dataset.transpose())):
         ground_truth = ground_truth.to_numpy()[0,:]
