@@ -1,7 +1,8 @@
 """
 Mira Welner
 July 2025
-This script loads the sinusoids generated in generate_sinusoid
+This script loads the heartrate data generated in generate_processed_heartrate.py and splits it into distributions based on histograms.
+It then trains a gan on each distribution and displays it.
 """
 
 import numpy as np
@@ -10,10 +11,13 @@ from torch.utils.data import TensorDataset, DataLoader
 import matplotlib.pyplot as plt
 from wgan import train_wgan, Generator
 from scipy.signal import find_peaks
-import sys
 plt.rcParams.update({'font.size': 8})
 
+#data processing params
+patient_names = ['06-31-24', '09-40-14', '10-48-45', '11-03-38', '13-22-23', '14-17-50']
+split_locs = [[92],[87,107],[60,67],[63],[92],[70,81,91]]
 
+#training params
 iterations = 100
 generated_ouput_iterations = 20
 batch_size = 64*8
@@ -116,37 +120,26 @@ def plot_mean_and_diff(synth_data:list, ground_truth_data:list, patient_names:li
         plt.show()
 
 
-def get_dataset_and_synth(path:str):
-    heartrate = np.loadtxt(path,delimiter=',')
-    first_half= heartrate[:, :heartrate.shape[1]//2].transpose()
-    second_half = heartrate[:, heartrate.shape[1]//2:].transpose()
-    first_half_a = first_half[:int(150000//5000),:]
-    first_half_b = first_half[int(150000//5000):int(300000//5000),:]
-    first_half_c = first_half[int(300000//5000):,:]
+def get_histograms(patient_names, split_locs):
+    """
+    Load data based on patient names and display histograms of the
+    heartrate distributions. Display the locations in which the distributions are split using
+    vertical lines.
+    """
+    _, axes = plt.subplots(3,2, figsize=(15,6), layout = "constrained")
+    axes = axes.flatten()
+    for itr, (patient,split) in enumerate(zip(patient_names,split_locs)):
+        heartrate_data = np.loadtxt(f'processed_data/heartrate_{patient}.csv',delimiter=',')[0]
+        counts, _, _ = axes[itr].hist(heartrate_data, bins=300)
+        axes[itr].set_title(f"Patient {patient} - distribution split at {split}")
+        axes[itr].vlines(split,ymin=0, ymax=max(counts)*0.8, color='red')
+        if itr==0:
+            axes[itr].set_xlabel("Heartrate")
+            axes[itr].set_ylabel("Frequency in ~day long recording")
+    plt.savefig("figures/dist_hist.png")
+    plt.show()
 
-    second_half_a = second_half[:int(150000//5000),:]
-    second_half_b = second_half[int(150000//5000):int(300000//5000),:]
-    second_half_c = second_half[int(300000//5000):,:]
-
-
-    dl_firsthalf_a, testset_firsthalf_a = make_train_test_dataloaders(first_half_a)
-    _, testset_secondhalf_a = make_train_test_dataloaders(second_half_a)
-
-    dataset_a = (dl_firsthalf_a, testset_firsthalf_a, testset_secondhalf_a)
-
-    dl_firsthalf_b, testset_firsthalf_b = make_train_test_dataloaders(first_half_b)
-    _, testset_secondhalf_b = make_train_test_dataloaders(second_half_b)
-
-    dataset_b = (dl_firsthalf_b, testset_firsthalf_b, testset_secondhalf_b)
-
-    dl_firsthalf_c, testset_firsthalf_c = make_train_test_dataloaders(first_half_c)
-    _, testset_secondhalf_c = make_train_test_dataloaders(second_half_c)
-
-    dataset_c = (dl_firsthalf_c, testset_firsthalf_c, testset_secondhalf_c)
-
-    return dataset_a, dataset_b, dataset_c
-
-dataset_a, dataset_b, dataset_c = get_dataset_and_synth('processed_data/heartrate_07.csv')
+get_histograms(patient_names = patient_names, split_locs=split_locs)
 
 
 """
@@ -156,7 +149,6 @@ dl_18_firsthalf, testset_18_firsthalf, testset_18_secondhalf = get_dataset_and_s
 dataloaders = [dl_07_firsthalf, dl_11_firsthalf, dl_18_firsthalf]
 first_half_tests = [testset_07_firsthalf, testset_11_firsthalf, testset_18_firsthalf]
 second_half_tests = [testset_07_secondhalf, testset_11_secondhalf, testset_18_secondhalf]
-"""
 synthetic_outputs = []
 for dataset, name in zip((dataset_a, dataset_b, dataset_c), ['07', '07', '07']):
     dataloader = dataset[0]
@@ -164,6 +156,7 @@ for dataset, name in zip((dataset_a, dataset_b, dataset_c), ['07', '07', '07']):
     synthetic_output = np.array([wgan_gp(torch.randn(1, 100).cuda()).cpu().detach().numpy().squeeze() for _ in range(generated_ouput_iterations)])
     synthetic_outputs.append(synthetic_output)
 
+"""
 
 
-plot_mean_and_diff(synthetic_outputs, [d[1] for d in (dataset_a, dataset_b, dataset_c)], ['part_a', 'part_b', 'part_c'], name='Patient 07 at 3 different times',  show=True)
+#plot_mean_and_diff(synthetic_outputs, [d[1] for d in (dataset_a, dataset_b, dataset_c)], ['part_a', 'part_b', 'part_c'], name='Patient 07 at 3 different times',  show=True)
