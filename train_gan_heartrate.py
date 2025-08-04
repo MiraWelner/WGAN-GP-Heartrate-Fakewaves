@@ -46,7 +46,7 @@ def make_GAN_test_set(dataset:np.ndarray):
     test_set = dataset.astype(np.float32).T
     return dataloader, test_set
 
-def train_store_gan(train, name, just_load, epochs=500):
+def train_store_gan(train, name, just_load, epochs):
     """
     if just_load, then we just load the generator and return it.
     If just_load is false, then train the new GAN and store it with
@@ -72,6 +72,7 @@ def get_histograms(name='dist_hist'):
     axes = axes.flatten()
     for itr, (patient,split) in enumerate(zip(patient_names,split_locs)):
         heartrate_data = np.loadtxt(f'processed_data/heartrate_{patient}.csv',delimiter=',')
+        heartrate_data = heartrate_data[:-2] #remove min and max
         counts, _, _ = axes[itr].hist(heartrate_data, bins=200)
         axes[itr].set_title(f"Patient {patient} - distribution split at {split}")
         axes[itr].vlines(split,ymin=0, ymax=max(counts)*0.8, color='red')
@@ -90,6 +91,7 @@ def get_dist_plots(name='dist_plot'):
         axes = [axes]
     for itr, (patient,split) in enumerate(zip(patient_names,split_locs)):
         heartrate_data = np.loadtxt(f'processed_data/heartrate_{patient}.csv',delimiter=',')
+        heartrate_data = heartrate_data[:-2] #remove min and max
         axes[itr].plot(heartrate_data)
         axes[itr].set_title(f"Patient {patient} - distribution split at {split}")
         if split:
@@ -107,7 +109,10 @@ def split_patient(patient_name:str, split_loc:float, stride:int=snip_len//2):
     split the data into two sets, one of which is a set of continuious snips greater than split_loc
     and the other is lower
     """
-    heartrate_data = np.loadtxt(f'processed_data/heartrate_{patient_name}.csv',delimiter=',')
+    heartrate_data_raw = np.loadtxt(f'processed_data/heartrate_{patient_name}.csv',delimiter=',')
+    heartrate_data = heartrate_data_raw[:-2] #remove min and max
+    heartrate_min = heartrate_data_raw[-2]
+    heartrate_max = heartrate_data_raw[-1]
     segments = np.lib.stride_tricks.sliding_window_view(heartrate_data, window_shape=snip_len)
     segments = segments[::stride]
     # Boolean masks
@@ -118,21 +123,22 @@ def split_patient(patient_name:str, split_loc:float, stride:int=snip_len//2):
     segments_gt = segments[mask_gt]
     segments_lt = segments[mask_lt]
 
-    return segments_gt.T, segments_lt.T
+    return segments_gt.T, segments_lt.T, heartrate_min, heartrate_max
 
-def get_synthetic_outputs(dataloaders, names, iterations, just_load):
-    synthetic_outputs = []
-    for dataloader, name in zip(dataloaders, names):
-        wgan_gp = train_store_gan(dataloader, name, just_load)
-        synthetic_output = np.array([wgan_gp(torch.randn(1, 100).cuda()).cpu().detach().numpy().squeeze() for _ in range(iterations)])
+def get_synthetic_outputs(gan, iterations, latent_dim=100):
+    """
+    Given a Pytorch GAN model of latent_dim 100, run the gan iterations times and put the result
+    in a numpy array which is returned
+    """
+    synthetic_output = np.array([gan(torch.randn(1, 100).cuda()).cpu().detach().numpy().squeeze() for _ in range(iterations)])
+    return synthetic_output
 
-        synthetic_outputs.append(synthetic_output)
-    return synthetic_outputs
-
-
-def final_plot(synth_data:list, ground_truth_data:list, name:str, show=False):
-    fig, axes = plt.subplots(2,3,figsize=(18,8),constrained_layout=True)
+def final_plot(synth_data:list, ground_truth_data:list, data_max:float, data_min:float, name:str, alpha=0.3):
+    fig, axes = plt.subplots(len(synth_data),3,figsize=(18,8),constrained_layout=True)
     for itr, (synthetic, ground_truth) in enumerate(zip(synth_data, ground_truth_data)):
+        synthetic =   ((synthetic + 1) / 2) * (data_max - data_min) + data_min
+        ground_truth =  ((ground_truth + 1) / 2) * (data_max - data_min) + data_min
+
         wave_ax = axes[itr,0]
         fft_ax = axes[itr,1]
         text_ax = axes[itr,2]
@@ -140,22 +146,23 @@ def final_plot(synth_data:list, ground_truth_data:list, name:str, show=False):
         all_gt_fft = []
         all_synth_fft = []
 
-        for it, gt_wave in enumerate(ground_truth[:5]):
+        for it, gt_wave in enumerate(ground_truth):
+            gt_squeezed = gt_wave.squeeze()
             if it==0:
-                wave_ax.plot(gt_wave.squeeze().flatten(), color='steelblue', label='Ground Truth')
+                wave_ax.plot(np.cumsum(gt_squeezed), gt_squeezed, color='blue', alpha=alpha, label=f'Ground Truth: {len(ground_truth)} samples')
             else:
-                wave_ax.plot(gt_wave.squeeze().flatten(), linewidth=0.5, color='steelblue')
-            freq, mag, _ = fft_transform(gt_wave.squeeze())
-            fft_ax.plot(freq, mag, color='steelblue')
+                wave_ax.plot(np.cumsum(gt_squeezed), gt_squeezed, alpha=alpha, linewidth=0.5, color='blue')
+            freq, mag, _ = fft_transform(gt_squeezed)
+            fft_ax.plot(freq[1:], mag[1:], linewidth=0.5, alpha=alpha, color='blue')
             all_gt_fft.append(mag)
 
-        for it, synth_wave in enumerate(synthetic[:5]):
+        for it, synth_wave in enumerate(synthetic):
             if it == 0:
-                wave_ax.plot(range(len(synth_wave)), synth_wave, color='green', label="Synthetic")
+                wave_ax.plot(np.cumsum(synth_wave), synth_wave, color='red', alpha=alpha, label=f'Synthetic: {len(synthetic)} samples')
             else:
-                wave_ax.plot(range(len(synth_wave)), synth_wave, linewidth=0.5,color='green')
+                wave_ax.plot(np.cumsum(synth_wave), synth_wave, alpha=alpha, linewidth=alpha, color='red')
             synth_freq, synth_mag, synth_peaks = fft_transform(synth_wave)
-            fft_ax.plot(synth_freq, synth_mag, color='green')
+            fft_ax.plot(synth_freq[1:], synth_mag[1:], linewidth=alpha, alpha=alpha, color='red')
             all_synth_fft.append(synth_mag)
 
         synth_mean = f'{np.mean(synthetic):.3f} \u00B1 {np.std(np.mean(synthetic, axis=1)):.2f}'
@@ -164,9 +171,8 @@ def final_plot(synth_data:list, ground_truth_data:list, name:str, show=False):
         gt_mean = f'{np.mean(ground_truth):.3f} \u00B1 {np.std(np.mean(ground_truth, axis=2)):.2f}'
         gt_std = f'{np.mean(np.std(ground_truth, axis=2)):.3f} \u00B1 {np.std(np.std(ground_truth, axis=2)):.2f}'
 
-        #wave_ax.set_ylim(-1.1,1.1)
-        wave_ax.set_ylabel(f"Dataset {itr}")
-        wave_ax.set_yticks([-1,0,1])
+        wave_ax.set_ylabel("R-R Interval (s)")
+        wave_ax.set_title("R-R Interval (s)")
         wave_ax.legend()
 
         text_ax.text(0.01, 0.95, f'Ground Truth Mean:{gt_mean}', ha='left', va='top')
@@ -183,8 +189,6 @@ def final_plot(synth_data:list, ground_truth_data:list, name:str, show=False):
         text_ax.set_xticks([])
         text_ax.set_yticks([])
 
-        fft_ax.set_xlim(0,0.1)
-
         if itr==0:
             fft_ax.set_title("Heartrate FFT")
             wave_ax.set_title("Scaled R-R Distances")
@@ -196,15 +200,13 @@ def final_plot(synth_data:list, ground_truth_data:list, name:str, show=False):
 
     plt.suptitle(name)
     plt.savefig(f'figures/{name}.png')
-    if show:
-        plt.show()
+    plt.show()
 
-get_histograms()
-get_dist_plots()
-
-
-high_data, low_data = split_patient(patient_name = '14-17-50', split_loc= -0.37)
+high_data, low_data, data_min, data_max = split_patient(patient_name = '14-17-50', split_loc= -0.37)
 high_data_dl, high_data_test = make_GAN_test_set(high_data)
 low_data_dl, low_data_test = make_GAN_test_set(low_data)
-synthetic_outputs = get_synthetic_outputs((high_data_dl, low_data_dl),('high_dataset', 'low_dataset'), iterations=20, just_load=True)
-final_plot(synthetic_outputs, [high_data_test,low_data_test], name='Patient 14-17-50 R-R distances',  show=True)
+wgan_gp_high = train_store_gan(high_data_dl, 'high_dataset', just_load=False, epochs=5000)
+wgan_gp_low = train_store_gan(low_data_dl, 'low_dataset', just_load=False, epochs=5000)
+synth_high = get_synthetic_outputs(wgan_gp_high, iterations=50)
+synth_low = get_synthetic_outputs(wgan_gp_low, iterations=25)
+final_plot([synth_high, synth_low], [high_data_test,low_data_test], data_max=data_max, data_min=data_min, name='Patient 14-17-50 R-R distances')
