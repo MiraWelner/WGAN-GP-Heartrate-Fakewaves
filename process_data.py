@@ -4,10 +4,14 @@ June 2025
 
 This script loads Dr Dey's heartrate data and sorts it. It then appends the raw rr data per each patient to
 an array and prints that array to a csv corresponding to the patient.
+
+It creates 2 csvs per patient. One is for the GAN, and it contains the data scaled between -1 and 1. Appended to the end of the CSV are the min value
+and max value, so that the CSV can be un-scaled when it is displayed in a plot.
+
+The other CSV is for the neural prophet, and is not scaled.
 """
 
 import numpy as np
-from scipy.interpolate import interp1d
 import glob
 heartrate_hz = 10 #the x values are 10th of a second
 ecg_hz = 500
@@ -35,6 +39,8 @@ def process_patient_data(name:str, parts:int):
 
 
     np.savetxt(f"processed_data/heartrate_{name}.csv", np.append(x_scaled,np.array([min,max])), delimiter = ",")
+    np.savetxt(f"processed_data/heartrate_{name}_unscaled.csv", np.array(all_rr), delimiter = ",")
+
 
 process_patient_data('06-31-24', parts=2)
 process_patient_data('09-40-14', parts=5)

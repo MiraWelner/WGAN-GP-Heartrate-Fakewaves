@@ -62,48 +62,6 @@ def train_store_gan(train, name, just_load, epochs):
     gen.load_state_dict(torch.load(gan_name, weights_only=True))
     return gen
 
-def get_histograms(name='dist_hist'):
-    """
-    Load data based on patient names and display histograms of the
-    heartrate distributions. Display the locations in which the distributions are split using
-    vertical lines.
-    """
-    _, axes = plt.subplots(len(patient_names)//2,2, figsize=(15,6), layout = "constrained")
-    axes = axes.flatten()
-    for itr, (patient,split) in enumerate(zip(patient_names,split_locs)):
-        heartrate_data = np.loadtxt(f'processed_data/heartrate_{patient}.csv',delimiter=',')
-        heartrate_data = heartrate_data[:-2] #remove min and max
-        counts, _, _ = axes[itr].hist(heartrate_data, bins=200)
-        axes[itr].set_title(f"Patient {patient} - distribution split at {split}")
-        axes[itr].vlines(split,ymin=0, ymax=max(counts)*0.8, color='red')
-        if itr==0:
-            axes[itr].set_xlabel("Scaled r-r interval length")
-            axes[itr].set_ylabel("Frequency in recording")
-    plt.savefig("figures/dist_hist.png")
-    plt.show()
-
-def get_dist_plots(name='dist_plot'):
-    if len(patient_names)//2:
-        _, axes = plt.subplots(len(patient_names)//2,2, figsize=(15,6), layout = "constrained")
-        axes = axes.flatten()
-    else:
-        _, axes = plt.subplots(1,1, figsize=(15,6), layout = "constrained")
-        axes = [axes]
-    for itr, (patient,split) in enumerate(zip(patient_names,split_locs)):
-        heartrate_data = np.loadtxt(f'processed_data/heartrate_{patient}.csv',delimiter=',')
-        heartrate_data = heartrate_data[:-2] #remove min and max
-        axes[itr].plot(heartrate_data)
-        axes[itr].set_title(f"Patient {patient} - distribution split at {split}")
-        if split:
-            axes[itr].hlines(split,xmin=0, xmax=len(heartrate_data), color='red')
-
-        axes[itr].set_xticks(range(0,len(heartrate_data), 2*10*60*60), [str(i) for i in range(0,int(np.ceil(len(heartrate_data)/(10*60*60))), 2)])
-        if itr==0:
-            axes[itr].set_ylabel("scaled r-r interval length")
-            axes[itr].set_xlabel("Time (h)")
-    plt.savefig(f"figures/{name}.png")
-    plt.show()
-
 def split_patient(patient_name:str, split_loc:float, stride:int=snip_len//2):
     """
     split the data into two sets, one of which is a set of continuious snips greater than split_loc

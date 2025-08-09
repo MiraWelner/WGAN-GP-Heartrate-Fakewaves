@@ -109,12 +109,12 @@ def make_train_test_dataloaders(square_data, triangle_data):
 
 def train_store_gan(train_square, train_triangle, gen_name = '', epochs=100, just_load=False):
     if not just_load:
-        gen_square, _ = train_wgan(train_square, epochs=epochs)
+        gen_square, _ = train_wgan(train_square, signal_length = 2500, epochs=epochs)
         torch.save(gen_square.state_dict(), f"models/generator_square_{gen_name}.pth")
-        gen_triangle, _ = train_wgan(train_triangle, epochs=epochs)
+        gen_triangle, _ = train_wgan(train_triangle,signal_length = 2500,  epochs=epochs)
         torch.save(gen_triangle.state_dict(), f"models/generator_triangle_{gen_name}.pth")
 
-    gen_triangle, gen_square = Generator().cuda(), Generator().cuda()
+    gen_triangle, gen_square = Generator(signal_length = 2500, latent_dim=100).cuda(), Generator(signal_length = 2500,  latent_dim=100).cuda()
     gen_triangle.load_state_dict(torch.load(f"models/generator_triangle_{gen_name}.pth", weights_only=True))
     gen_square.load_state_dict(torch.load(f"models/generator_square_{gen_name}.pth", weights_only=True))
     return gen_square, gen_triangle
