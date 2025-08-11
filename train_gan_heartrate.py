@@ -16,7 +16,7 @@ plt.rcParams.update({'font.size': 8})
 #data processing params
 patient_names = '06-31-24', '09-40-14', '10-48-45', '11-03-38', '13-22-23', '14-17-50'
 split_locs = [-0.75, -0.555, -0.16], -0.5, -0.1, None ,-0.5,-0.37
-snip_len = 600
+snip_len = 2500
 
 #training params
 batch_size = 16

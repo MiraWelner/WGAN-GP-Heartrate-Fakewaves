@@ -3,17 +3,109 @@ Mira Welner
 August 2025
 
 This script loads the heartrate data generated in generate_processed_heartrate.py and displays the histograms and the heartrates themselves.
+It comes with many other functions to display the binning study, elbow graphs, silhouette study, etc.
+
+The patient names and 'elbows' are hardcoded at the top.
 """
 
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.mixture import GaussianMixture
+from fastkde.fastKDE import pdf
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
 
 #data processing params
 patient_names = '06-31-24', '09-40-14', '10-48-45', '11-03-38', '13-22-23', '14-17-50'
 elbows = 3, 2, 2, 8, 2, 2
-snip_len = 2500
 
+def binning_study(name='binning', bin_nums = [10,50,100,400,700,1000,2000]):
+    _, axes = plt.subplots(len(patient_names), len(bin_nums), figsize=(17,10), layout = "constrained")
+    for itr, (patient,elbow) in enumerate(zip(patient_names,elbows)):
+        # Load your 1D heartrate data
+        heartrate_data = np.loadtxt(
+            f'processed_data/heartrate_{patient}_unscaled.csv',
+            delimiter=','
+        )
+        for j, bin_num in enumerate(bin_nums):
+            if j == 0:
+                axes[itr,j].set_ylabel(patient)
+            if itr == 0:
+                axes[itr,j].set_title(f"{bin_num} bins")
+            axes[itr,j].hist(heartrate_data, bins=bin_num)
+            axes[itr,j].set_xticks([])
+            axes[itr,j].set_yticks([])
+
+    plt.suptitle("Binning Study")
+    plt.savefig(f"figures/{name}.png")
+    plt.show()
+
+def silhouette_plot(name='silhouette', samplings=50):
+    _ = plt.figure(figsize=(14,7), layout = "constrained")
+    for itr, (patient,elbow) in enumerate(zip(patient_names,elbows)):
+        heartrate_data = np.loadtxt(f'processed_data/heartrate_{patient}_unscaled.csv', delimiter=',').reshape(-1, 1)
+
+        silhouettes = []
+        for _ in range(samplings):
+            indices = np.random.choice(len(heartrate_data), len(heartrate_data)//50, replace=False)
+            sampled_data = heartrate_data[indices]
+            kmeans = KMeans(n_clusters=elbow)
+            cluster_labels = kmeans.fit_predict(sampled_data)
+            avg_silhouette = silhouette_score(sampled_data, cluster_labels)
+            silhouettes.append(avg_silhouette)
+        plt.scatter(range(len(silhouettes)), silhouettes, label=f"{patient}: {elbow} splits")
+    plt.ylabel("silhouette score")
+    plt.xlabel("nth sample")
+    plt.legend()
+    plt.title("Silhouette Scores of Subsampled Patient Data (each sample 1/50th of all data)")
+    plt.savefig(f"figures/{name}.png")
+    plt.show()
+
+
+def get_violin_plot(name='violin'):
+    all_data = []
+    for patient in patient_names:
+        heartrate_data = np.loadtxt(
+            f'processed_data/heartrate_{patient}_unscaled.csv',
+            delimiter=','
+        ).ravel()
+        all_data.append(heartrate_data)
+
+
+    plt.figure(figsize=(14,7), layout = "constrained")
+    _ = plt.violinplot(all_data, showmeans=True, showextrema=True, showmedians=True)
+
+    plt.xticks(range(1, len(patient_names) + 1), patient_names)
+    plt.xlabel("Patient")
+    plt.ylabel("Heartrate")
+    plt.title("Heartrate Distributions Violin Plot")
+    plt.grid(True, axis='y', linestyle='--', alpha=0.6)
+    plt.savefig(f"figures/{name}.png")
+    plt.show()
+
+
+def get_kernel_estimate(name='kernel'):
+    """
+    Uses fastKDE to create and plot a Gaussian Kernel Density Estimate
+    """
+    _, axes = plt.subplots(2, len(patient_names)//2, figsize=(14,7), layout = "constrained")
+    axes = axes.flatten()
+    for itr, (patient,elbow) in enumerate(zip(patient_names,elbows)):
+        # Load your 1D heartrate data
+        heartrate_data = np.loadtxt(
+            f'processed_data/heartrate_{patient}_unscaled.csv',
+            delimiter=','
+        ).ravel()
+
+        density = np.array(pdf(heartrate_data))
+        axes[itr].set_yticks([])
+        axes[itr].plot(density)
+        axes[itr].set_xlabel('Heartrate')
+        axes[itr].set_ylabel('Estimated Density')
+        axes[itr].set_title(f"Patient {patient}")
+    plt.suptitle("Gaussian Kernel Density Function for 6 patients")
+    plt.savefig(f"figures/{name}.png")
+    plt.show()
 
 def get_elbow_graph(name='elbow'):
     _, axes = plt.subplots(2, len(patient_names)//2, figsize=(14,7), layout = "constrained")
@@ -29,7 +121,6 @@ def get_elbow_graph(name='elbow'):
             bics.append(gmm.bic(heartrate_data))
             aics.append(gmm.aic(heartrate_data))
 
-        # Plot BIC and AIC
         axes[itr].set_yticks([])
         axes[itr].plot(n_components_range, bics, marker='o', label='Bayesian Information Criterion (BIC)')
         axes[itr].plot(n_components_range, aics, marker='s', label='Akaike Information Criterion (AIC)')
@@ -99,7 +190,3 @@ def get_dist_plots(name='dist_plot'):
             axes[itr].set_xlabel("Time (h)")
     plt.savefig(f"figures/{name}.png")
     plt.show()
-
-#get_dist_plots()
-#get_elbow_graph()
-get_histograms()
