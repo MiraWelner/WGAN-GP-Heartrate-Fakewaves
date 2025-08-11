@@ -16,7 +16,7 @@ plt.rcParams.update({'font.size': 8})
 #data processing params
 patient_names = '06-31-24', '09-40-14', '10-48-45', '11-03-38', '13-22-23', '14-17-50'
 split_locs = [-0.75, -0.555, -0.16], -0.5, -0.1, None ,-0.5,-0.37
-snip_len = 2500
+snip_len = 600
 
 #training params
 batch_size = 16
@@ -67,7 +67,7 @@ def split_patient(patient_name:str, split_loc:float, stride:int=snip_len//2):
     split the data into two sets, one of which is a set of continuious snips greater than split_loc
     and the other is lower
     """
-    heartrate_data_raw = np.loadtxt(f'processed_data/heartrate_{patient_name}.csv',delimiter=',')
+    heartrate_data_raw = np.loadtxt(f'processed_data/heartrate_{patient_name}_unscaled.csv',delimiter=',')
     heartrate_data = heartrate_data_raw[:-2] #remove min and max
     heartrate_min = heartrate_data_raw[-2]
     heartrate_max = heartrate_data_raw[-1]
@@ -160,11 +160,11 @@ def final_plot(synth_data:list, ground_truth_data:list, data_max:float, data_min
     plt.savefig(f'figures/{name}.png')
     plt.show()
 
-high_data, low_data, data_min, data_max = split_patient(patient_name = '14-17-50', split_loc= -0.37)
+high_data, low_data, data_min, data_max = split_patient(patient_name = '14-17-50', split_loc= 0.7)
 high_data_dl, high_data_test = make_GAN_test_set(high_data)
 low_data_dl, low_data_test = make_GAN_test_set(low_data)
-wgan_gp_high = train_store_gan(high_data_dl, 'high_dataset', just_load=False, epochs=5000)
-wgan_gp_low = train_store_gan(low_data_dl, 'low_dataset', just_load=False, epochs=5000)
+wgan_gp_high = train_store_gan(high_data_dl, 'high_dataset', just_load=False, epochs=500)
+wgan_gp_low = train_store_gan(low_data_dl, 'low_dataset', just_load=False, epochs=500)
 synth_high = get_synthetic_outputs(wgan_gp_high, iterations=50)
 synth_low = get_synthetic_outputs(wgan_gp_low, iterations=25)
 final_plot([synth_high, synth_low], [high_data_test,low_data_test], data_max=data_max, data_min=data_min, name='Patient 14-17-50 R-R distances')

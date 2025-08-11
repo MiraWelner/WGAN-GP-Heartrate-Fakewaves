@@ -11,22 +11,51 @@ from sklearn.mixture import GaussianMixture
 
 #data processing params
 patient_names = '06-31-24', '09-40-14', '10-48-45', '11-03-38', '13-22-23', '14-17-50'
-split_locs = [-0.75, -0.555, -0.16], -0.5, -0.1, None ,-0.5,-0.37
+elbows = 3, 2, 2, 8, 2, 2
 snip_len = 2500
 
-def get_histograms(n_bins, name='dist_hist'):
+
+def get_elbow_graph(name='elbow'):
+    _, axes = plt.subplots(2, len(patient_names)//2, figsize=(14,7), layout = "constrained")
+    axes = axes.flatten()
+    for itr, (patient,elbow) in enumerate(zip(patient_names,elbows)):
+        heartrate_data = np.loadtxt(f'processed_data/heartrate_{patient}_unscaled.csv', delimiter=',').reshape(-1, 1)
+        n_components_range = range(1, 10)
+        bics = []
+        aics = []
+        for n in n_components_range:
+            gmm = GaussianMixture(n_components=n, random_state=42)
+            gmm.fit(heartrate_data)
+            bics.append(gmm.bic(heartrate_data))
+            aics.append(gmm.aic(heartrate_data))
+
+        # Plot BIC and AIC
+        axes[itr].set_yticks([])
+        axes[itr].plot(n_components_range, bics, marker='o', label='Bayesian Information Criterion (BIC)')
+        axes[itr].plot(n_components_range, aics, marker='s', label='Akaike Information Criterion (AIC)')
+        axes[itr].set_xlabel('Number of Components')
+        axes[itr].set_ylabel('Score')
+        axes[itr].vlines([elbow], ymin=min(bics), ymax=max(bics), color='black')
+        axes[itr].set_title(f"Patient {patient}")
+        axes[itr].legend()
+    plt.suptitle("Elbow Plots for Gaussian Mixture Models of 6 Patients Heartrates")
+    plt.savefig(f"figures/{name}.png")
+    plt.show()
+
+
+def get_histograms(name='dist_hist'):
     """
     Load data based on patient names and display histograms of the
     heartrate distributions. Display the locations in which the distributions are split using
     vertical lines.
     """
-    _, axes = plt.subplots(len(patient_names)//2,2, figsize=(15,6), layout = "constrained")
+    _, axes = plt.subplots(2, len(patient_names)//2, figsize=(14,7), layout = "constrained")
     axes = axes.flatten()
-    gmm = GaussianMixture(n_components=n_bins, random_state=42)
-    for itr, (patient,split) in enumerate(zip(patient_names,split_locs)):
+    for itr, (patient,elbow) in enumerate(zip(patient_names,[2,2,2,2,2,2])):
         heartrate_data = np.loadtxt(f'processed_data/heartrate_{patient}_unscaled.csv', delimiter=',')
 
         # Fit GMM to raw data
+        gmm = GaussianMixture(n_components=elbow)
         gmm.fit(heartrate_data.reshape(-1, 1))
 
         # Make histogram
@@ -46,7 +75,7 @@ def get_histograms(n_bins, name='dist_hist'):
             axes[itr].set_xlabel("R-R interval length (s)")
             axes[itr].set_ylabel("Frequency in recording")
     plt.suptitle("R-R Interval Histograms for 6 Patients split by Gaussian Mixture")
-    plt.savefig("figures/dist_hist.png")
+    plt.savefig(f"figures/{name}.png")
     plt.show()
 
 def get_dist_plots(name='dist_plot'):
@@ -56,7 +85,7 @@ def get_dist_plots(name='dist_plot'):
     else:
         _, axes = plt.subplots(1,1, figsize=(15,6), layout = "constrained")
         axes = [axes]
-    for itr, (patient,split) in enumerate(zip(patient_names,split_locs)):
+    for itr, (patient,split) in enumerate(zip(patient_names,elbows)):
         heartrate_data = np.loadtxt(f'processed_data/heartrate_{patient}_unscaled.csv',delimiter=',')
         heartrate_data = heartrate_data[:-2] #remove min and max
         axes[itr].plot(heartrate_data)
@@ -71,5 +100,6 @@ def get_dist_plots(name='dist_plot'):
     plt.savefig(f"figures/{name}.png")
     plt.show()
 
-get_histograms(2)
-get_dist_plots()
+#get_dist_plots()
+#get_elbow_graph()
+get_histograms()
