@@ -11,7 +11,7 @@ from torch.utils.data import TensorDataset, DataLoader
 import matplotlib.pyplot as plt
 from wgan import train_wgan, Generator
 from scipy.signal import find_peaks
-plt.rcParams.update({'font.size': 8})
+from matplotlib.lines import Line2D
 
 #data processing params
 patient_names = '06-31-24', '09-40-14', '10-48-45', '11-03-38', '13-22-23', '14-17-50'
@@ -67,15 +67,16 @@ def split_patient(patient_name:str, split_loc:float, stride:int=snip_len//2):
     split the data into two sets, one of which is a set of continuious snips greater than split_loc
     and the other is lower
     """
-    heartrate_data_raw = np.loadtxt(f'processed_data/heartrate_{patient_name}_unscaled.csv',delimiter=',')
+    heartrate_data_raw = np.loadtxt(f'processed_data/heartrate_{patient_name}.csv',delimiter=',')
     heartrate_data = heartrate_data_raw[:-2] #remove min and max
     heartrate_min = heartrate_data_raw[-2]
     heartrate_max = heartrate_data_raw[-1]
     segments = np.lib.stride_tricks.sliding_window_view(heartrate_data, window_shape=snip_len)
     segments = segments[::stride]
     # Boolean masks
-    mask_gt = np.all(segments > split_loc, axis=1)
-    mask_lt = np.all(segments < split_loc, axis=1)
+    scaled_split_loc  = 2*(split_loc - heartrate_min) / (heartrate_max -heartrate_min )-1
+    mask_gt = np.all(segments > scaled_split_loc, axis=1)
+    mask_lt = np.all(segments < scaled_split_loc, axis=1)
 
     # Split into two arrays
     segments_gt = segments[mask_gt]
@@ -91,7 +92,7 @@ def get_synthetic_outputs(gan, iterations, latent_dim=100):
     synthetic_output = np.array([gan(torch.randn(1, 100).cuda()).cpu().detach().numpy().squeeze() for _ in range(iterations)])
     return synthetic_output
 
-def final_plot(synth_data:list, ground_truth_data:list, data_max:float, data_min:float, name:str, alpha=0.3):
+def final_plot(synth_data:list, ground_truth_data:list, data_max:float, data_min:float, name:str, alpha=0.0001, linewidth=0.5):
     fig, axes = plt.subplots(len(synth_data),3,figsize=(18,8),constrained_layout=True)
     for itr, (synthetic, ground_truth) in enumerate(zip(synth_data, ground_truth_data)):
         synthetic =   ((synthetic + 1) / 2) * (data_max - data_min) + data_min
@@ -99,29 +100,19 @@ def final_plot(synth_data:list, ground_truth_data:list, data_max:float, data_min
 
         wave_ax = axes[itr,0]
         fft_ax = axes[itr,1]
+        fft_ax.set_ylim(0,20)
         text_ax = axes[itr,2]
-
-        all_gt_fft = []
-        all_synth_fft = []
 
         for it, gt_wave in enumerate(ground_truth):
             gt_squeezed = gt_wave.squeeze()
-            if it==0:
-                wave_ax.plot(np.cumsum(gt_squeezed), gt_squeezed, color='blue', alpha=alpha, label=f'Ground Truth: {len(ground_truth)} samples')
-            else:
-                wave_ax.plot(np.cumsum(gt_squeezed), gt_squeezed, alpha=alpha, linewidth=0.5, color='blue')
+            wave_ax.plot(np.cumsum(gt_squeezed), gt_squeezed, linewidth=linewidth, alpha=alpha, color='blue')
             freq, mag, _ = fft_transform(gt_squeezed)
-            fft_ax.plot(freq[1:], mag[1:], linewidth=0.5, alpha=alpha, color='blue')
-            all_gt_fft.append(mag)
+            fft_ax.plot(freq[1:], mag[1:], alpha=alpha, linewidth=linewidth, color='blue')
 
         for it, synth_wave in enumerate(synthetic):
-            if it == 0:
-                wave_ax.plot(np.cumsum(synth_wave), synth_wave, color='red', alpha=alpha, label=f'Synthetic: {len(synthetic)} samples')
-            else:
-                wave_ax.plot(np.cumsum(synth_wave), synth_wave, alpha=alpha, linewidth=alpha, color='red')
+            wave_ax.plot(np.cumsum(synth_wave), synth_wave, alpha=alpha, linewidth=linewidth, color='red')
             synth_freq, synth_mag, synth_peaks = fft_transform(synth_wave)
-            fft_ax.plot(synth_freq[1:], synth_mag[1:], linewidth=alpha, alpha=alpha, color='red')
-            all_synth_fft.append(synth_mag)
+            fft_ax.plot(synth_freq[1:], synth_mag[1:], alpha=alpha, linewidth=linewidth, color='red')
 
         synth_mean = f'{np.mean(synthetic):.3f} \u00B1 {np.std(np.mean(synthetic, axis=1)):.2f}'
         synth_std = f'{np.mean(np.std(synthetic, axis=1)):.3f} \u00B1 {np.std(np.std(synthetic, axis=1)):.2f}'
@@ -130,19 +121,13 @@ def final_plot(synth_data:list, ground_truth_data:list, data_max:float, data_min
         gt_std = f'{np.mean(np.std(ground_truth, axis=2)):.3f} \u00B1 {np.std(np.std(ground_truth, axis=2)):.2f}'
 
         wave_ax.set_ylabel("R-R Interval (s)")
-        wave_ax.set_title("R-R Interval (s)")
-        wave_ax.legend()
+        legend_lines = [Line2D([0], [0], color='blue'),  Line2D([0], [0], color='red')]
+        wave_ax.legend(legend_lines, [f"Ground Truth: {len(ground_truth)} samples", f"Synthetic: {len(synthetic)} samples"])
 
         text_ax.text(0.01, 0.95, f'Ground Truth Mean:{gt_mean}', ha='left', va='top')
         text_ax.text(0.01, 0.80, f'Ground Truth STD:{gt_std}', ha='left', va='top')
         text_ax.text(0.01, 0.65,f'Synthetic Data Mean: {synth_mean}', ha='left', va='top')
         text_ax.text(0.01, 0.50, f'Synthetic Data STD: {synth_std}', ha='left', va='top')
-        #all_mses = [weighted_mse(ground_truth,synth_wave) for gt, synth_wave in zip(ground_truth,synthetic)]
-        #all_fft_mses = [weighted_mse(gt_fft,synth_fft) for gt_fft, synth_fft in zip(all_gt_fft, all_synth_fft)]
-
-        #text_ax.text(0.01, 0.35, f'Weighted Waveform MSE - Mean:{np.mean(all_mses):.5f} \u00B1:{np.std(all_mses):.3f}', ha='left', va='top')
-        #text_ax.text(0.01, 0.20, f'Weighted FFT MSE - Mean:{np.mean(all_fft_mses):.5f} \u00B1:{np.std(all_fft_mses):.3f}', ha='left', va='top')
-
 
         text_ax.set_xticks([])
         text_ax.set_yticks([])
@@ -163,8 +148,8 @@ def final_plot(synth_data:list, ground_truth_data:list, data_max:float, data_min
 high_data, low_data, data_min, data_max = split_patient(patient_name = '14-17-50', split_loc= 0.7)
 high_data_dl, high_data_test = make_GAN_test_set(high_data)
 low_data_dl, low_data_test = make_GAN_test_set(low_data)
-wgan_gp_high = train_store_gan(high_data_dl, 'high_dataset', just_load=False, epochs=500)
-wgan_gp_low = train_store_gan(low_data_dl, 'low_dataset', just_load=False, epochs=500)
-synth_high = get_synthetic_outputs(wgan_gp_high, iterations=50)
-synth_low = get_synthetic_outputs(wgan_gp_low, iterations=25)
-final_plot([synth_high, synth_low], [high_data_test,low_data_test], data_max=data_max, data_min=data_min, name='Patient 14-17-50 R-R distances')
+wgan_gp_high = train_store_gan(high_data_dl, 'high_dataset', just_load=False, epochs=700)
+wgan_gp_low = train_store_gan(low_data_dl, 'low_dataset', just_load=False, epochs=700)
+synth_high = get_synthetic_outputs(wgan_gp_high, iterations=len(high_data_test))
+synth_low = get_synthetic_outputs(wgan_gp_low, iterations=len(low_data_test))
+final_plot([synth_high, synth_low], [high_data_test,low_data_test], data_max=data_max, data_min=data_min, name='Patient 14-17-50 R-R distances split at 0.7')

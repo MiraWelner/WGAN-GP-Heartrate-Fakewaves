@@ -110,13 +110,13 @@ def make_train_test_dataloaders(square_data, triangle_data):
 def train_store_gan(train_square, train_triangle, gen_name = '', epochs=100, just_load=False):
     if not just_load:
         gen_square, _ = train_wgan(train_square, signal_length = 2500, epochs=epochs)
-        torch.save(gen_square.state_dict(), f"models/generator_square_{gen_name}.pth")
+        torch.save(gen_square.state_dict(), f"../models/generator_square_{gen_name}.pth")
         gen_triangle, _ = train_wgan(train_triangle,signal_length = 2500,  epochs=epochs)
-        torch.save(gen_triangle.state_dict(), f"models/generator_triangle_{gen_name}.pth")
+        torch.save(gen_triangle.state_dict(), f"../models/generator_triangle_{gen_name}.pth")
 
     gen_triangle, gen_square = Generator(signal_length = 2500, latent_dim=100).cuda(), Generator(signal_length = 2500,  latent_dim=100).cuda()
-    gen_triangle.load_state_dict(torch.load(f"models/generator_triangle_{gen_name}.pth", weights_only=True))
-    gen_square.load_state_dict(torch.load(f"models/generator_square_{gen_name}.pth", weights_only=True))
+    gen_triangle.load_state_dict(torch.load(f"../models/generator_triangle_{gen_name}.pth", weights_only=True))
+    gen_square.load_state_dict(torch.load(f"../models/generator_square_{gen_name}.pth", weights_only=True))
     return gen_square, gen_triangle
 
 def plot_mean_and_diff(square_real, square_gen, triangle_real, triangle_gen, filename='comparison', show=False):
@@ -164,7 +164,7 @@ def plot_mean_and_diff(square_real, square_gen, triangle_real, triangle_gen, fil
     axes[1].set_title(f"Comparison Between original Triangle Waves and WGAN-Generated Triangle Waves \n Generated Mean: {triangle_gen_mean:.3f}, Generated Median {triangle_gen_median:.3f}, Generated STD {triangle_gen_std:.3f}, Original Mean: {triangle_real_mean:.3f}, Original Median {triangle_real_median:.3f}, Original STD {triangle_real_std:.3f}")
 
     plt.tight_layout()
-    plt.savefig(f"figures/wgan_comparison/{filename}.png")
+    plt.savefig(f"../figures/wgan_comparison/{filename}.png")
     if show:
         plt.show()
 
@@ -183,7 +183,7 @@ def plot_examples(square_gen, triangle_gen, filename='examples', show=False):
     axes[1].set_xlabel("Time (s)")
     axes[1].set_ylim(-1.2,1.2)
     plt.tight_layout()
-    plt.savefig(f"figures/samples/{filename}.png")
+    plt.savefig(f"../figures/samples/{filename}.png")
     if show:
         plt.show()
 
