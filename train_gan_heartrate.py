@@ -92,7 +92,7 @@ def get_synthetic_outputs(gan, iterations, latent_dim=100):
     synthetic_output = np.array([gan(torch.randn(1, 100).cuda()).cpu().detach().numpy().squeeze() for _ in range(iterations)])
     return synthetic_output
 
-def final_plot(synth_data:list, ground_truth_data:list, data_max:float, data_min:float, name:str, alpha=0.0001, linewidth=0.5):
+def final_plot(synth_data:list, ground_truth_data:list, data_max:float, data_min:float, name:str, alpha=0.02):
     fig, axes = plt.subplots(len(synth_data),3,figsize=(18,8),constrained_layout=True)
     for itr, (synthetic, ground_truth) in enumerate(zip(synth_data, ground_truth_data)):
         synthetic =   ((synthetic + 1) / 2) * (data_max - data_min) + data_min
@@ -100,19 +100,20 @@ def final_plot(synth_data:list, ground_truth_data:list, data_max:float, data_min
 
         wave_ax = axes[itr,0]
         fft_ax = axes[itr,1]
-        fft_ax.set_ylim(0,20)
+        fft_ax.set_ylim(0,10)
+        wave_ax.set_ylim(0.5,1.2)
         text_ax = axes[itr,2]
+
+        for it, synth_wave in enumerate(synthetic):
+            wave_ax.plot(np.cumsum(synth_wave), synth_wave, alpha=alpha, color='red')
+            synth_freq, synth_mag, synth_peaks = fft_transform(synth_wave)
+            fft_ax.plot(synth_freq[1:], synth_mag[1:], alpha=alpha, color='red')
 
         for it, gt_wave in enumerate(ground_truth):
             gt_squeezed = gt_wave.squeeze()
-            wave_ax.plot(np.cumsum(gt_squeezed), gt_squeezed, linewidth=linewidth, alpha=alpha, color='blue')
+            wave_ax.plot(np.cumsum(gt_squeezed), gt_squeezed, alpha=alpha, color='blue')
             freq, mag, _ = fft_transform(gt_squeezed)
-            fft_ax.plot(freq[1:], mag[1:], alpha=alpha, linewidth=linewidth, color='blue')
-
-        for it, synth_wave in enumerate(synthetic):
-            wave_ax.plot(np.cumsum(synth_wave), synth_wave, alpha=alpha, linewidth=linewidth, color='red')
-            synth_freq, synth_mag, synth_peaks = fft_transform(synth_wave)
-            fft_ax.plot(synth_freq[1:], synth_mag[1:], alpha=alpha, linewidth=linewidth, color='red')
+            fft_ax.plot(freq[1:], mag[1:], alpha=alpha, color='blue')
 
         synth_mean = f'{np.mean(synthetic):.3f} \u00B1 {np.std(np.mean(synthetic, axis=1)):.2f}'
         synth_std = f'{np.mean(np.std(synthetic, axis=1)):.3f} \u00B1 {np.std(np.std(synthetic, axis=1)):.2f}'
@@ -148,8 +149,8 @@ def final_plot(synth_data:list, ground_truth_data:list, data_max:float, data_min
 high_data, low_data, data_min, data_max = split_patient(patient_name = '14-17-50', split_loc= 0.7)
 high_data_dl, high_data_test = make_GAN_test_set(high_data)
 low_data_dl, low_data_test = make_GAN_test_set(low_data)
-wgan_gp_high = train_store_gan(high_data_dl, 'high_dataset', just_load=False, epochs=700)
-wgan_gp_low = train_store_gan(low_data_dl, 'low_dataset', just_load=False, epochs=700)
+wgan_gp_high = train_store_gan(high_data_dl, 'high_dataset', just_load=False, epochs=1000)
+wgan_gp_low = train_store_gan(low_data_dl, 'low_dataset', just_load=False, epochs=1000)
 synth_high = get_synthetic_outputs(wgan_gp_high, iterations=len(high_data_test))
-synth_low = get_synthetic_outputs(wgan_gp_low, iterations=len(low_data_test))
+synth_low = get_synthetic_outputs(wgan_gp_low, iterations=int(len(low_data_test)/2))
 final_plot([synth_high, synth_low], [high_data_test,low_data_test], data_max=data_max, data_min=data_min, name='Patient 14-17-50 R-R distances split at 0.7')

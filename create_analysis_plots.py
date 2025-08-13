@@ -14,10 +14,50 @@ from sklearn.mixture import GaussianMixture
 from fastkde.fastKDE import pdf
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
+from scipy.stats import f
 
 #data processing params
 patient_names = '06-31-24', '09-40-14', '10-48-45', '11-03-38', '13-22-23', '14-17-50'
-elbows = 3, 2, 2, 8, 2, 2
+elbows = 3, 2, 2, 2, 2, 2
+
+
+def variance_ratio_gmm_1d(n, n_components):
+    X = n.reshape(-1, 1)
+    gmm = GaussianMixture(n_components=n_components, random_state=0)
+    gmm.fit(X)
+    means = gmm.means_.reshape(-1)           # shape (K,)
+    resp = gmm.predict_proba(X)              # shape (num_samples, K)
+    overall_mean = X.mean()
+    tss = np.sum((X.flatten() - overall_mean) ** 2)
+    diffs = X - means.reshape(1, -1)
+    sq_dists = diffs ** 2
+    wss = np.sum(resp * sq_dists)
+    bss = tss - wss
+    variance_ratio = bss / tss
+    return variance_ratio
+
+
+def f_test(name='variance_ratio', max_splits=10):
+    _, axes = plt.subplots(2, len(patient_names)//2, figsize=(14,7), layout = "constrained")
+    axes = axes.flatten()
+    n_components_range = range(1, max_splits)
+    for itr, (patient,elbow) in enumerate(zip(patient_names,elbows)):
+        # Load your 1D heartrate data
+        heartrate_data = np.loadtxt(f'processed_data/heartrate_{patient}_unscaled.csv', delimiter=',')
+        all_ratios = []
+        for ncomp in n_components_range:
+            all_ratios.append(variance_ratio_gmm_1d(heartrate_data, ncomp))
+        axes[itr].plot(n_components_range, all_ratios)
+        axes[itr].set_ylabel('Variance Ratio')
+        axes[itr].set_xlabel('# Gaussian Distributions in Mixture')
+        axes[itr].set_title(f"patient {patient}")
+    plt.suptitle('Variance Ratio - Goodness of Fit')
+    plt.savefig(f"figures/{name}.png")
+    plt.show()
+
+
+
+
 
 def binning_study(name='binning', bin_nums = [10,50,100,400,700,1000,2000]):
     _, axes = plt.subplots(len(patient_names), len(bin_nums), figsize=(17,10), layout = "constrained")
@@ -62,7 +102,7 @@ def silhouette_plot(name='silhouette', samplings=50):
     plt.show()
 
 
-def get_violin_plot(name='violin'):
+def violin_plot(name='violin'):
     all_data = []
     for patient in patient_names:
         heartrate_data = np.loadtxt(
@@ -84,13 +124,13 @@ def get_violin_plot(name='violin'):
     plt.show()
 
 
-def get_kernel_estimate(name='kernel'):
+def kernel_estimate(name='kernel'):
     """
     Uses fastKDE to create and plot a Gaussian Kernel Density Estimate
     """
     _, axes = plt.subplots(2, len(patient_names)//2, figsize=(14,7), layout = "constrained")
     axes = axes.flatten()
-    for itr, (patient,elbow) in enumerate(zip(patient_names,elbows)):
+    for itr, patient in enumerate(patient_names):
         # Load your 1D heartrate data
         heartrate_data = np.loadtxt(
             f'processed_data/heartrate_{patient}_unscaled.csv',
@@ -107,12 +147,12 @@ def get_kernel_estimate(name='kernel'):
     plt.savefig(f"figures/{name}.png")
     plt.show()
 
-def get_elbow_graph(name='elbow'):
+def get_elbow_graph(name='elbow', max_splits = 10):
     _, axes = plt.subplots(2, len(patient_names)//2, figsize=(14,7), layout = "constrained")
     axes = axes.flatten()
     for itr, (patient,elbow) in enumerate(zip(patient_names,elbows)):
         heartrate_data = np.loadtxt(f'processed_data/heartrate_{patient}_unscaled.csv', delimiter=',').reshape(-1, 1)
-        n_components_range = range(1, 10)
+        n_components_range = range(1, max_splits)
         bics = []
         aics = []
         for n in n_components_range:
@@ -134,7 +174,7 @@ def get_elbow_graph(name='elbow'):
     plt.show()
 
 
-def get_histograms(name='dist_hist'):
+def histograms(name='histogram_plot'):
     """
     Load data based on patient names and display histograms of the
     heartrate distributions. Display the locations in which the distributions are split using
@@ -142,7 +182,7 @@ def get_histograms(name='dist_hist'):
     """
     _, axes = plt.subplots(2, len(patient_names)//2, figsize=(14,7), layout = "constrained")
     axes = axes.flatten()
-    for itr, (patient,elbow) in enumerate(zip(patient_names,[2,2,2,2,2,2])):
+    for itr, (patient,elbow) in enumerate(zip(patient_names,elbows)):
         heartrate_data = np.loadtxt(f'processed_data/heartrate_{patient}_unscaled.csv', delimiter=',')
 
         # Fit GMM to raw data
@@ -169,7 +209,7 @@ def get_histograms(name='dist_hist'):
     plt.savefig(f"figures/{name}.png")
     plt.show()
 
-def get_dist_plots(name='dist_plot'):
+def plot_heartrate_over_time(name='dist_plot'):
     if len(patient_names)//2:
         _, axes = plt.subplots(len(patient_names)//2,2, figsize=(15,6), layout = "constrained")
         axes = axes.flatten()
@@ -190,3 +230,5 @@ def get_dist_plots(name='dist_plot'):
             axes[itr].set_xlabel("Time (h)")
     plt.savefig(f"figures/{name}.png")
     plt.show()
+
+histograms()
