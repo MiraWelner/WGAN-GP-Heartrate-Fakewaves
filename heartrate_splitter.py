@@ -1,39 +1,16 @@
-"""
-Mira Welner
-July 2025
-This script loads the heartrate data generated in generate_processed_heartrate.py and splits it into distributions based on histograms.
-It then trains a gan on each distribution and displays it.
-"""
-
 import numpy as np
 import torch
-from torch.utils.data import TensorDataset, DataLoader
 import matplotlib.pyplot as plt
 from wgan import train_wgan, Generator
 from scipy.signal import find_peaks
 from matplotlib.lines import Line2D
+from torch.utils.data import TensorDataset, DataLoader
 
-#data processing params
+
 patient_names = '06-31-24', '09-40-14', '10-48-45', '11-03-38', '13-22-23', '14-17-50'
-split_locs = [-0.75, -0.555, -0.16], -0.5, -0.1, None ,-0.5,-0.37
-snip_len = 2500
-
-#training params
+snip_len=60*60
 batch_size = 16
-test_train_split = 0.8
 
-def fft_transform(signal:np.ndarray) -> list[np.ndarray]:
-    fft_result = np.fft.fft(signal)
-    freqs = np.fft.fftfreq(len(signal), d=1.0)
-    posfreqs = freqs[:len(signal)//2]
-    magnitude = np.abs(fft_result)
-    posmag =  magnitude[:len(signal)//2].flatten()
-    peaks = posfreqs[find_peaks(posmag, height=10)[0]]
-    return [posfreqs, posmag, peaks]
-
-def weighted_mse(a:np.ndarray, b:np.ndarray) -> np.ndarray:
-    weights = np.full_like(a, 1.0, dtype=float)
-    return np.sum(weights * (a - b)**2) / np.sum(weights)
 
 def make_GAN_test_set(dataset:np.ndarray):
     """
@@ -46,6 +23,27 @@ def make_GAN_test_set(dataset:np.ndarray):
     test_set = dataset.astype(np.float32).T
     return dataloader, test_set
 
+def fft_transform(signal:np.ndarray) -> list[np.ndarray]:
+    fft_result = np.fft.fft(signal)
+    freqs = np.fft.fftfreq(len(signal), d=1.0)
+    posfreqs = freqs[:len(signal)//2]
+    magnitude = np.abs(fft_result)
+    posmag =  magnitude[:len(signal)//2].flatten()
+    peaks = posfreqs[find_peaks(posmag, height=10)[0]]
+    return [posfreqs, posmag, peaks]
+
+def split_data(patient):
+    heartrate_raw = np.loadtxt(f'processed_data/heartrate_{patient}.csv', delimiter=',')
+    heartrate_data = heartrate_raw[:-2] #remove min and max
+    heartrate_min = heartrate_raw[-2]
+    heartrate_max = heartrate_raw[-1]
+    total_len = len(heartrate_data) // snip_len * snip_len  # truncate to multiple of snip_len
+    clipped = heartrate_data[:total_len]
+    shaped_data = clipped.reshape(-1, snip_len).T
+    first_half = shaped_data[:int(snip_len/2),:]
+    second_half = shaped_data[int(snip_len/2):,:]
+    return first_half, second_half, heartrate_min, heartrate_max
+
 def train_store_gan(train, name, just_load, epochs):
     """
     if just_load, then we just load the generator and return it.
@@ -53,36 +51,13 @@ def train_store_gan(train, name, just_load, epochs):
     the same naming conventions.
     """
     gan_name = f"models/generator_heartrate_{name}.pth"
-    print(gan_name)
     if not just_load:
-        gen, _ = train_wgan(train, epochs=epochs, signal_length=snip_len)
+        gen, _ = train_wgan(train, epochs=epochs, signal_length=int(snip_len//2))
         torch.save(gen.state_dict(), gan_name)
 
-    gen = Generator(signal_length=snip_len, latent_dim=100).cuda()
+    gen = Generator(signal_length=int(snip_len//2), latent_dim=100).cuda()
     gen.load_state_dict(torch.load(gan_name, weights_only=True))
     return gen
-
-def split_patient(patient_name:str, split_loc:float, stride:int=snip_len//2):
-    """
-    split the data into two sets, one of which is a set of continuious snips greater than split_loc
-    and the other is lower
-    """
-    heartrate_data_raw = np.loadtxt(f'processed_data/heartrate_{patient_name}.csv',delimiter=',')
-    heartrate_data = heartrate_data_raw[:-2] #remove min and max
-    heartrate_min = heartrate_data_raw[-2]
-    heartrate_max = heartrate_data_raw[-1]
-    segments = np.lib.stride_tricks.sliding_window_view(heartrate_data, window_shape=snip_len)
-    segments = segments[::stride]
-    # Boolean masks
-    scaled_split_loc  = 2*(split_loc - heartrate_min) / (heartrate_max -heartrate_min )-1
-    mask_gt = np.all(segments > scaled_split_loc, axis=1)
-    mask_lt = np.all(segments < scaled_split_loc, axis=1)
-
-    # Split into two arrays
-    segments_gt = segments[mask_gt]
-    segments_lt = segments[mask_lt]
-
-    return segments_gt.T, segments_lt.T, heartrate_min, heartrate_max
 
 def get_synthetic_outputs(gan, iterations, latent_dim=100):
     """
@@ -92,7 +67,7 @@ def get_synthetic_outputs(gan, iterations, latent_dim=100):
     synthetic_output = np.array([gan(torch.randn(1, 100).cuda()).cpu().detach().numpy().squeeze() for _ in range(iterations)])
     return synthetic_output
 
-def final_plot(synth_data:list, ground_truth_data:list, data_max:float, data_min:float, name:str, alpha=0.02):
+def final_plot(synth_data:list, ground_truth_data:list, data_max:float, data_min:float, name:str, alpha=0.1):
     fig, axes = plt.subplots(len(synth_data),3,figsize=(18,8),constrained_layout=True)
     for itr, (synthetic, ground_truth) in enumerate(zip(synth_data, ground_truth_data)):
         synthetic =   ((synthetic + 1) / 2) * (data_max - data_min) + data_min
@@ -122,6 +97,8 @@ def final_plot(synth_data:list, ground_truth_data:list, data_max:float, data_min
         gt_std = f'{np.mean(np.std(ground_truth, axis=2)):.3f} \u00B1 {np.std(np.std(ground_truth, axis=2)):.2f}'
 
         wave_ax.set_ylabel("R-R Interval (s)")
+        wave_ax.set_title(f"Scaled R-R Distances, part {itr}")
+
         legend_lines = [Line2D([0], [0], color='blue'),  Line2D([0], [0], color='red')]
         wave_ax.legend(legend_lines, [f"Ground Truth: {len(ground_truth)} samples", f"Synthetic: {len(synthetic)} samples"])
 
@@ -133,9 +110,9 @@ def final_plot(synth_data:list, ground_truth_data:list, data_max:float, data_min
         text_ax.set_xticks([])
         text_ax.set_yticks([])
 
+
         if itr==0:
             fft_ax.set_title("Heartrate FFT")
-            wave_ax.set_title("Scaled R-R Distances")
             wave_ax.set_xlabel("Time (s)")
 
         else:
@@ -146,13 +123,14 @@ def final_plot(synth_data:list, ground_truth_data:list, data_max:float, data_min
     plt.savefig(f'figures/{name}.png')
     plt.show()
 
-'''
-high_data, low_data, data_min, data_max = split_patient(patient_name = '14-17-50', split_loc= 0.7)
-high_data_dl, high_data_test = make_GAN_test_set(high_data)
-low_data_dl, low_data_test = make_GAN_test_set(low_data)
-wgan_gp_high = train_store_gan(high_data_dl, 'high_dataset', just_load=False, epochs=1000)
-wgan_gp_low = train_store_gan(low_data_dl, 'low_dataset', just_load=False, epochs=1000)
-synth_high = get_synthetic_outputs(wgan_gp_high, iterations=len(high_data_test))
-synth_low = get_synthetic_outputs(wgan_gp_low, iterations=int(len(low_data_test)/2))
-final_plot([synth_high, synth_low], [high_data_test,low_data_test], data_max=data_max, data_min=data_min, name='Patient 14-17-50 R-R distances split at 0.7')
-'''
+first_half, second_half, heartrate_min, heartrate_max = split_data(patient_names[0])
+
+first_half_dl, first_half_test = make_GAN_test_set(first_half)
+second_half_dl, second_half_test = make_GAN_test_set(second_half)
+
+
+wgan_gp_first = train_store_gan(first_half_dl, 'first_half', just_load=True, epochs=5000)
+wgan_gp_second = train_store_gan(second_half_dl, 'second_half', just_load=True, epochs=5000)
+synth_first = get_synthetic_outputs(wgan_gp_first, iterations=len(first_half_test))
+synth_second = get_synthetic_outputs(wgan_gp_second, iterations=int(len(second_half_test)/2))
+final_plot([synth_first, synth_second], [first_half_test,second_half_test], data_max=heartrate_max, data_min=heartrate_min, name='Patient 06-31-24 R-R First Second Half')
