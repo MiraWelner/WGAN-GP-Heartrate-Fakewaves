@@ -51,7 +51,7 @@ def f_test(name='variance_ratio', max_splits=10):
         axes[itr].set_ylabel('Variance Ratio')
         axes[itr].set_xlabel('# Gaussian Distributions in Mixture')
         axes[itr].set_title(f"patient {patient}")
-    plt.suptitle('Variance Ratio - Goodness of Fit')
+    plt.suptitle('Variance Ratio - "Goodness" of Fit')
     plt.savefig(f"figures/{name}.png")
     plt.show()
 
@@ -231,4 +231,4 @@ def plot_heartrate_over_time(name='dist_plot'):
     plt.savefig(f"figures/{name}.png")
     plt.show()
 
-histograms()
+f_test()
